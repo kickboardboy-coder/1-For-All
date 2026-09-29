@@ -45,7 +45,6 @@
 | **`feat`** | 새로운 기능 추가 | `feat: AI 동선 추천 API 연동` |
 | **`fix`** | 버그 수정 | `fix: 일정 삭제 시 UI 미갱신 오류 수정` |
 | **`docs`** | 문서 수정 | `docs: README.md 내용 업데이트` |
-| **`style`** | 코드 포맷팅, 세미콜론 누락 등 | `style: Prettier 적용` |
 | **`refactor`**| 코드 리팩토링 (기능 변경 없음) | `refactor: 일정 계산 로직 구조 개선` |
 
 ---
