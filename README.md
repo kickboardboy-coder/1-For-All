@@ -85,9 +85,10 @@ flowchart TD
     CheckStatus -->|최적화 전| Main
     CheckStatus -->|최적화 완료| Result[일정 결과 페이지]
 
-    Main -->|구글맵 장소 탐색 및 주머니 담기| Main
-    Main -->|장소만 저장하기| PlanSelect
-    Main -->|최적화하기 버튼 클릭| Result
+    Main --> Search[구글맵 장소 탐색 및 주머니 담기]
+    Search -->|추가 탐색| Main
+    Search -->|장소만 저장| PlanSelect
+    Search -->|최적화 실행| Result
 
     Result -->|털실 동선 및 일정 확인/수정| Result
 ```
