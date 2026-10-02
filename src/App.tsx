@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router'
 import RootLayout from './layouts/RootLayout'
 import LoginPage from './pages/LoginPage'
+import NotFoundPage from './pages/NotFoundPage'
 import PlannerPage from './pages/PlannerPage'
 import PlansPage from './pages/PlansPage'
 import ResultPage from './pages/ResultPage'
@@ -16,6 +17,7 @@ function App() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/planner" element={<PlannerPage />} />
         <Route path="/result" element={<ResultPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   )
