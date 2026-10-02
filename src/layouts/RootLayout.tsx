@@ -1,14 +1,10 @@
 import { Outlet } from 'react-router'
+import Navbar from '../components/Navbar'
 
 function RootLayout() {
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="brand">
-          <p className="brand-name">의외로 쉬운 여행</p>
-          <p className="brand-tagline">의쉬행 · 의외로 쉬운 여행, 의외로 쉬운 행복</p>
-        </div>
-      </header>
+      <Navbar />
       <main className="app-main">
         <Outlet />
       </main>

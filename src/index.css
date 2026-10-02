@@ -11,28 +11,77 @@ body {
   flex-direction: column;
 }
 
-.app-header,
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 76px;
+  padding: 0 36px;
+  background: #fff;
+  border-bottom: 1px solid #e4ebe7;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.navbar-brand,
+.navbar-brand-link,
+.navbar-help {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-brand,
+.navbar-brand-link {
+  gap: 10px;
+}
+
+.navbar-brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.navbar-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #e8f4ef;
+}
+
+.navbar-title {
+  color: #243d37;
+  font-size: 23px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.navbar-tagline {
+  margin: 0;
+  color: #7a8983;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.navbar-help {
+  gap: 7px;
+  color: #7a8983;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .app-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px 32px;
-}
-
-.brand-name,
-.brand-tagline,
-.app-footer p {
-  margin: 0;
-}
-
-.brand-name {
-  font-weight: 700;
-}
-
-.brand-tagline,
-.app-footer {
   color: #6d7f78;
   font-size: 14px;
+}
+
+.app-footer p {
+  margin: 0;
 }
 
 .app-main {
