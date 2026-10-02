@@ -1,0 +1,42 @@
+body {
+  margin: 0;
+  color: #17352d;
+  background: #f4f7f5;
+  font-family: sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header,
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 32px;
+}
+
+.brand-name,
+.brand-tagline,
+.app-footer p {
+  margin: 0;
+}
+
+.brand-name {
+  font-weight: 700;
+}
+
+.brand-tagline,
+.app-footer {
+  color: #6d7f78;
+  font-size: 14px;
+}
+
+.app-main {
+  flex: 1;
+  padding: 24px 32px;
+}
+
