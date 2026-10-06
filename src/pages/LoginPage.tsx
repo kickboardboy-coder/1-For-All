@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import axios from 'axios'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
@@ -19,21 +20,41 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
+function getLoginErrorMessage(error: unknown) {
+  if (!axios.isAxiosError(error) || !error.response) {
+    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  }
+
+  if (error.response.status === 400 || error.response.status === 401) {
+    return '이메일 또는 비밀번호가 올바르지 않습니다.'
+  }
+
+  return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+}
+
 function LoginPage() {
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
 
   async function onSubmit(values: LoginForm) {
-    const { accessToken } = await login(values)
-    setToken(accessToken)
-    navigate('/plans', { replace: true })
+    clearErrors('root')
+
+    try {
+      const { accessToken } = await login(values)
+      setToken(accessToken)
+      navigate('/plans', { replace: true })
+    } catch (error) {
+      setError('root', { message: getLoginErrorMessage(error) })
+    }
   }
 
   return (
@@ -76,7 +97,12 @@ function LoginPage() {
         <button type="button" className="login-forgot">
           비밀번호를 잊으셨나요?
         </button>
-        <button type="submit" className="login-submit">
+        {errors.root && (
+          <p className="login-error login-form-error" role="alert">
+            {errors.root.message}
+          </p>
+        )}
+        <button type="submit" className="login-submit" disabled={isSubmitting}>
           로그인
         </button>
       </form>
