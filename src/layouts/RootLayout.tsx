@@ -10,7 +10,10 @@ function RootLayout() {
       </main>
       <footer className="app-footer">
         <p>의쉬행 · 여행 준비는 가볍게, 행복은 가까이</p>
-        <p>이용약관 · 개인정보 처리방침</p>
+        <div className="app-footer-policies">
+          <p>이용약관</p>
+          <p>개인정보 처리방침</p>
+        </div>
       </footer>
     </div>
   )
