@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { z } from 'zod'
+import { login } from '../api/auth'
 import LoginIntro from '../components/LoginIntro'
+import { setToken } from '../utils/token'
 
 const loginSchema = z.object({
   email: z.email('이메일 형식으로 입력해 주세요'),
@@ -18,6 +20,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 function LoginPage() {
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const {
     register,
@@ -27,8 +30,10 @@ function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
-  function onSubmit(values: LoginForm) {
-    void values
+  async function onSubmit(values: LoginForm) {
+    const { accessToken } = await login(values)
+    setToken(accessToken)
+    navigate('/plans', { replace: true })
   }
 
   return (
