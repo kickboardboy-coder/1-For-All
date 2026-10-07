@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
+import { FirebaseError } from 'firebase/app'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
@@ -33,11 +33,11 @@ const signUpSchema = z
 type SignUpForm = z.infer<typeof signUpSchema>
 
 function getSignUpErrorMessage(error: unknown) {
-  if (!axios.isAxiosError(error) || !error.response) {
+  if (error instanceof FirebaseError && error.code === 'auth/network-request-failed') {
     return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   }
 
-  if (error.response.status === 409) {
+  if (error instanceof FirebaseError && error.code === 'auth/email-already-in-use') {
     return '이미 가입된 이메일입니다.'
   }
 
