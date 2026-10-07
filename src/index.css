@@ -64,11 +64,28 @@ body {
   white-space: nowrap;
 }
 
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .navbar-help {
   gap: 7px;
   color: #7a8983;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.navbar-logout {
+  border: 0;
+  background: transparent;
+  color: #62766e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .app-footer {

@@ -25,6 +25,10 @@ export async function signUp({ email, password }: SignUpRequest) {
   await signOut(auth)
 }
 
+export async function logout() {
+  await signOut(auth)
+}
+
 export async function refreshAccessToken() {
   const user = auth.currentUser
 
