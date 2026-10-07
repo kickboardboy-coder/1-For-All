@@ -17,3 +17,17 @@ export async function login({ email, password }: LoginRequest) {
 
   return data
 }
+
+type SignUpRequest = {
+  email: string
+  password: string
+}
+
+export async function signUp({ email, password }: SignUpRequest) {
+  const { data } = await api.post('/auth/signup', {
+    email,
+    password,
+  })
+
+  return data
+}
