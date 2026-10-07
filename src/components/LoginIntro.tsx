@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import chevron from '../assets/login-chevron.svg'
 import dot from '../assets/login-dot.svg'
 import river from '../assets/login-river.svg'
@@ -11,7 +12,17 @@ const places = [
   { number: '3', name: '쉬어가는 곳', className: 'login-place-3' },
 ]
 
-function LoginIntro() {
+function LoginIntro({
+  title = (
+    <>
+      계획은 가볍게,
+      <br />
+      여행은 즐겁게.
+    </>
+  ),
+}: {
+  title?: ReactNode
+}) {
   return (
     <aside className="login-intro">
       <p className="login-intro-kicker">
@@ -19,11 +30,7 @@ function LoginIntro() {
         여행이 쉬워지는 순간, 의쉬행
       </p>
       <div className="login-intro-copy">
-        <h2>
-          계획은 가볍게,
-          <br />
-          여행은 즐겁게.
-        </h2>
+        <h2>{title}</h2>
         <p>
           가고 싶은 곳만 담아주세요.
           <br />

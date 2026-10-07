@@ -442,6 +442,19 @@ body {
   margin-top: 16px;
 }
 
+.login-submit {
+  height: 54px;
+  margin-top: 24px;
+  border: 0;
+  border-radius: 16px;
+  background: #27846e;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .login-submit:disabled {
   cursor: default;
   opacity: 0.7;
@@ -458,5 +471,52 @@ body {
   color: #1f6f5b;
   font-weight: 700;
   text-decoration: none;
+}
+
+.signup-hint {
+  margin: 0;
+  color: #7a8983;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.signup-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 20px;
+  color: #62766e;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+}
+
+.signup-agree input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #27846e;
+}
+
+.signup-agree-link {
+  color: #27846e;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.signup-login {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e4ebe7;
+  color: #62766e;
+  font-size: 13px;
+}
+
+.signup-login a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #27846e;
 }
 
