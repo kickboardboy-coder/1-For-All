@@ -1,14 +1,15 @@
 import axios from 'axios'
-import { getToken } from '../utils/token'
+import { auth } from '../firebase'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
 })
 
-api.interceptors.request.use((config) => {
-  const token = getToken()
+api.interceptors.request.use(async (config) => {
+  const user = auth.currentUser
 
-  if (token) {
+  if (user) {
+    const token = await user.getIdToken()
     config.headers.Authorization = `Bearer ${token}`
   }
 

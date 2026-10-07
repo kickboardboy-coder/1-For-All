@@ -1,8 +1,26 @@
-import { Link } from 'react-router'
+import { onAuthStateChanged } from 'firebase/auth'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { logout } from '../api/auth'
 import gnbLogo from '../assets/gnb-logo.svg'
 import helpIcon from '../assets/help-icon.svg'
+import { auth } from '../firebase'
 
 function Navbar() {
+  const navigate = useNavigate()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(user !== null)
+    })
+  }, [])
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <header className="navbar">
       <div className="navbar-brand">
@@ -14,9 +32,16 @@ function Navbar() {
         </Link>
         <p className="navbar-tagline">의쉬행 · 의외로 쉬운 여행, 의외로 쉬운 행복</p>
       </div>
-      <div className="navbar-help">
-        <img src={helpIcon} alt="" />
-        <span>이용 방법</span>
+      <div className="navbar-actions">
+        <div className="navbar-help">
+          <img src={helpIcon} alt="" />
+          <span>이용 방법</span>
+        </div>
+        {isLoggedIn && (
+          <button type="button" className="navbar-logout" onClick={handleLogout}>
+            로그아웃
+          </button>
+        )}
       </div>
     </header>
   )
