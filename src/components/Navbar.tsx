@@ -1,20 +1,12 @@
-import { onAuthStateChanged } from 'firebase/auth'
-import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { logout } from '../api/auth'
 import gnbLogo from '../assets/gnb-logo.svg'
 import helpIcon from '../assets/help-icon.svg'
-import { auth } from '../firebase'
+import { useAuth } from '../contexts/AuthContext'
 
 function Navbar() {
   const navigate = useNavigate()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-
-  useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(user !== null)
-    })
-  }, [])
+  const { isLoggedIn } = useAuth()
 
   async function handleLogout() {
     await logout()
