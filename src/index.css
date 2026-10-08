@@ -70,6 +70,37 @@ body {
   gap: 20px;
 }
 
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  height: 32px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #e8f4ef;
+  color: #243d37;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.navbar-user svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #27846e;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.navbar-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .navbar-help {
   gap: 7px;
   color: #7a8983;

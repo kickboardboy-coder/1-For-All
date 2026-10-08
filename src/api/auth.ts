@@ -5,36 +5,21 @@ import {
 } from 'firebase/auth'
 import { auth } from '../firebase'
 
-type LoginRequest = {
+type EmailPassword = {
   email: string
   password: string
 }
 
-export async function login({ email, password }: LoginRequest) {
+export async function login({ email, password }: EmailPassword) {
   const credential = await signInWithEmailAndPassword(auth, email, password)
   return credential.user
 }
 
-type SignUpRequest = {
-  email: string
-  password: string
-}
-
-export async function signUp({ email, password }: SignUpRequest) {
+export async function signUp({ email, password }: EmailPassword) {
   await createUserWithEmailAndPassword(auth, email, password)
   await signOut(auth)
 }
 
 export async function logout() {
   await signOut(auth)
-}
-
-export async function refreshAccessToken() {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  return user.getIdToken(true)
 }

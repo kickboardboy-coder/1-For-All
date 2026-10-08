@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
+import RequireAuth from './components/RequireAuth'
+import RequireGuest from './components/RequireGuest'
 import RootLayout from './layouts/RootLayout'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -12,11 +14,15 @@ function App() {
     <Routes>
       <Route element={<RootLayout />}>
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/plans" element={<PlansPage />} />
-        <Route path="/planner" element={<PlannerPage />} />
-        <Route path="/result" element={<ResultPage />} />
+        <Route element={<RequireGuest />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+        </Route>
+        <Route element={<RequireAuth />}>
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/planner" element={<PlannerPage />} />
+          <Route path="/result" element={<ResultPage />} />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
