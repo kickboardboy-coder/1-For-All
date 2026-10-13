@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: plans
+// Document ID: auto-generated
+// Fields:
+//   - userId: string (required, immutable) - Firebase Auth uid of the owner
+//   - region: string (required, 1-80) - travel region
+//   - nights: int or null (required, 0-60 when set) - number of nights
+//   - startDate: string YYYY-MM-DD or null (required) - departure date
+//   - status: string (required) - pending or optimized
+//   - updatedAt: string (required) - ISO 8601 update time
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidPlan(data) {
+      return hasOnlyAllowedFields(['userId', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.region is string
+        && data.region.size() > 0
+        && data.region.size() <= 80
+        && (data.nights == null || (data.nights is int && data.nights >= 0 && data.nights <= 60))
+        && (data.startDate == null || (data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))
+        && data.status in ['pending', 'optimized']
+        && data.updatedAt is string
+        && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T');
+    }
+
+    match /plans/{planId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && isValidPlan(request.resource.data)
+        && request.resource.data.status == 'pending';
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && isValidPlan(request.resource.data)
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
