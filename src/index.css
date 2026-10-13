@@ -151,7 +151,7 @@ body {
 }
 
 .plan-create {
-  max-width: 480px;
+  max-width: 760px;
   margin: 48px auto;
   color: #17352d;
   font-family: 'Noto Sans KR', sans-serif;
@@ -171,6 +171,112 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-width: 480px;
+}
+
+.plan-list {
+  margin-top: 40px;
+}
+
+.plan-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-list-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.plan-list-heading span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 25px;
+  height: 25px;
+  border-radius: 999px;
+  background: #e8f4ef;
+  color: #27846e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plan-list > p {
+  color: #62766e;
+}
+
+.plan-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #e4ebe7;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.plan-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-card-title h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.plan-card-main > p,
+.plan-card-side p {
+  margin: 6px 0 0;
+  color: #62766e;
+  font-size: 14px;
+}
+
+.plan-card-side {
+  flex: none;
+  text-align: right;
+}
+
+.plan-card-side a {
+  color: #27846e;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plan-badge-recent {
+  background: #f7f1e4;
+  color: #8a6232;
+}
+
+.plan-badge-pending {
+  background: #f3f6f4;
+  color: #62766e;
+}
+
+.plan-badge-optimized {
+  background: #e8f4ef;
+  color: #27846e;
 }
 
 .not-found {
