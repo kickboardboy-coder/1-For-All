@@ -5,23 +5,26 @@ import { planStatusLabel, type Plan } from '../types/plan'
 type PlanCardProps = {
   plan: Plan
   isRecent: boolean
+  placeCount: number
 }
 
 function formatPeriod(plan: Plan) {
+  const prefix = plan.country ? `${plan.country} · ` : ''
+
   if (plan.nights === null) {
-    return '날짜 미정'
+    return `${prefix}날짜 미정`
   }
 
   const length = `${plan.nights}박 ${plan.nights + 1}일`
 
   if (!plan.startDate) {
-    return length
+    return `${prefix}${length}`
   }
 
   const start = new Date(`${plan.startDate}T00:00:00`)
 
   if (Number.isNaN(start.getTime())) {
-    return length
+    return `${prefix}${length}`
   }
 
   const end = new Date(start)
@@ -29,7 +32,7 @@ function formatPeriod(plan: Plan) {
   const startLabel = `${start.getMonth() + 1}월 ${start.getDate()}일`
   const endLabel = `${end.getMonth() + 1}월 ${end.getDate()}일`
 
-  return `${startLabel} – ${endLabel} · ${length}`
+  return `${prefix}${startLabel} – ${endLabel} · ${length}`
 }
 
 function formatUpdatedAt(value: string) {
@@ -55,7 +58,7 @@ function formatUpdatedAt(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일 수정`
 }
 
-function PlanCard({ plan, isRecent }: PlanCardProps) {
+function PlanCard({ plan, isRecent, placeCount }: PlanCardProps) {
   return (
     <article className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
       <div className="plan-card-thumb" aria-hidden="true" />
@@ -66,7 +69,7 @@ function PlanCard({ plan, isRecent }: PlanCardProps) {
           <span className={`plan-badge plan-badge-${plan.status}`}>{planStatusLabel[plan.status]}</span>
         </div>
         <p>{formatPeriod(plan)}</p>
-        <p className="plan-card-places">담은 장소 0곳</p>
+        <p className="plan-card-places">담은 장소 {placeCount}곳</p>
       </div>
       <div className="plan-card-side">
         <p>{formatUpdatedAt(plan.updatedAt)}</p>

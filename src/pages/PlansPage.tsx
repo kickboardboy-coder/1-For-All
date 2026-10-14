@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getPlans } from '../api/plans'
+import { getPlaceCount } from '../api/places'
 import PlanCard from '../components/PlanCard'
 import planArrow from '../assets/plan-arrow.svg'
 import planCloud from '../assets/plan-cloud.svg'
@@ -11,6 +12,7 @@ import type { Plan } from '../types/plan'
 function PlansPage() {
   const navigate = useNavigate()
   const [plans, setPlans] = useState<Plan[]>([])
+  const [placeCounts, setPlaceCounts] = useState<Record<string, number>>({})
   const [isLoadingPlans, setIsLoadingPlans] = useState(true)
   const [listError, setListError] = useState('')
 
@@ -18,9 +20,25 @@ function PlansPage() {
     let ignore = false
 
     getPlans()
-      .then((nextPlans) => {
-        if (!ignore) {
-          setPlans(nextPlans)
+      .then(async (nextPlans) => {
+        if (ignore) {
+          return
+        }
+
+        setPlans(nextPlans)
+
+        try {
+          const counts = await Promise.all(
+            nextPlans.map(async (plan) => [plan.id, await getPlaceCount(plan.id)] as const),
+          )
+
+          if (!ignore) {
+            setPlaceCounts(Object.fromEntries(counts))
+          }
+        } catch {
+          if (!ignore) {
+            setPlaceCounts({})
+          }
         }
       })
       .catch(() => {
@@ -81,7 +99,7 @@ function PlansPage() {
         )}
         {!isLoadingPlans && !listError && plans.length === 0 && <p>저장된 여행 계획이 없습니다.</p>}
         {plans.map((plan, index) => (
-          <PlanCard key={plan.id} plan={plan} isRecent={index === 0} />
+          <PlanCard key={plan.id} plan={plan} isRecent={index === 0} placeCount={placeCounts[plan.id] ?? 0} />
         ))}
       </div>
       <p className="plans-note">

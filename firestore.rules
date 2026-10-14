@@ -8,11 +8,24 @@ rules_version = '2';
 // Document ID: auto-generated
 // Fields:
 //   - userId: string (required, immutable) - Firebase Auth uid of the owner
+//   - country: string (optional, 1-40) - travel country
 //   - region: string (required, 1-80) - travel region
 //   - nights: int or null (required, 0-60 when set) - number of nights
 //   - startDate: string YYYY-MM-DD or null (required) - departure date
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
+//
+// Subcollection: plans/{planId}/places
+// Document ID: auto-generated
+// Fields:
+//   - planId: string (required, immutable) - parent plan id
+//   - name: string (required, 1-80) - place name
+//   - latitude: number (required, -90 to 90)
+//   - longitude: number (required, -180 to 180)
+//   - category: string (required) - sight, food, or stay
+//   - openingHours: string (max 80) or null (required)
+//   - closedDays: string (max 80) or null (required)
+//   - breakTime: string (max 80) or null (required)
 //
 // ===============================================================
 
@@ -27,9 +40,10 @@ service cloud.firestore {
     }
 
     function isValidPlan(data) {
-      return hasOnlyAllowedFields(['userId', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
+      return hasOnlyAllowedFields(['userId', 'country', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
         && data.userId is string
         && data.userId == request.auth.uid
+        && (!('country' in data) || (data.country is string && data.country.size() > 0 && data.country.size() <= 40))
         && data.region is string
         && data.region.size() > 0
         && data.region.size() <= 80
@@ -38,6 +52,33 @@ service cloud.firestore {
         && data.status in ['pending', 'optimized']
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T');
+    }
+
+    function isPlanOwner(planId) {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/plans/$(planId)).data.userId == request.auth.uid;
+    }
+
+    function isOptionalText(value) {
+      return value == null || (value is string && value.size() <= 80);
+    }
+
+    function isValidPlace(planId) {
+      return request.resource.data.keys().hasOnly(['planId', 'name', 'latitude', 'longitude', 'category', 'openingHours', 'closedDays', 'breakTime'])
+        && request.resource.data.planId == planId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.category in ['sight', 'food', 'stay']
+        && isOptionalText(request.resource.data.openingHours)
+        && isOptionalText(request.resource.data.closedDays)
+        && isOptionalText(request.resource.data.breakTime);
     }
 
     match /plans/{planId} {
@@ -50,6 +91,15 @@ service cloud.firestore {
         && isValidPlan(request.resource.data)
         && request.resource.data.userId == resource.data.userId;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      match /places/{placeId} {
+        allow read: if isPlanOwner(planId);
+        allow create: if isPlanOwner(planId) && isValidPlace(planId);
+        allow update: if isPlanOwner(planId)
+          && isValidPlace(planId)
+          && request.resource.data.planId == resource.data.planId;
+        allow delete: if isPlanOwner(planId);
+      }
     }
   }
 }

@@ -6,6 +6,7 @@ import {
   getDocs,
   orderBy,
   query,
+  updateDoc,
   where,
   type DocumentData,
 } from 'firebase/firestore'
@@ -13,12 +14,13 @@ import { auth, db } from '../firebase'
 import { planStatuses, type Plan, type PlanStatus } from '../types/plan'
 
 type NewPlan = {
+  country: string
   region: string
   nights: number | null
   startDate: string | null
 }
 
-export async function savePlan({ region, nights, startDate }: NewPlan): Promise<Plan> {
+export async function savePlan({ country, region, nights, startDate }: NewPlan): Promise<Plan> {
   const user = auth.currentUser
 
   if (!user) {
@@ -27,6 +29,7 @@ export async function savePlan({ region, nights, startDate }: NewPlan): Promise<
 
   const plan = {
     userId: user.uid,
+    country,
     region,
     nights,
     startDate,
@@ -36,6 +39,16 @@ export async function savePlan({ region, nights, startDate }: NewPlan): Promise<
   const docRef = await addDoc(collection(db, 'plans'), plan)
 
   return { id: docRef.id, ...plan }
+}
+
+export async function touchPlan(planId: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  await updateDoc(doc(db, 'plans', planId), { updatedAt: new Date().toISOString() })
 }
 
 function isPlanStatus(value: unknown): value is PlanStatus {
@@ -55,6 +68,7 @@ function toPlan(id: string, data: DocumentData): Plan | null {
   return {
     id,
     userId: data.userId,
+    country: typeof data.country === 'string' ? data.country : null,
     region: data.region,
     nights: typeof data.nights === 'number' ? data.nights : null,
     startDate: typeof data.startDate === 'string' ? data.startDate : null,
