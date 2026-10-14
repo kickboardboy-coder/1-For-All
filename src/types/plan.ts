@@ -10,6 +10,7 @@ export const planStatusLabel: Record<PlanStatus, string> = {
 export type Plan = {
   id: string
   userId: string
+  country: string | null
   region: string
   nights: number | null
   startDate: string | null

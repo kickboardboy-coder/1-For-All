@@ -13,6 +13,7 @@ import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getPlan, savePlan } from '../api/plans'
+import { destinations } from '../data/destinations'
 import type { Plan } from '../types/plan'
 
 const steps = [
@@ -26,8 +27,11 @@ function PlannerPage() {
   const navigate = useNavigate()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState('')
+  const [country, setCountry] = useState('')
   const [region, setRegion] = useState('')
+  const [openMenu, setOpenMenu] = useState<'country' | 'region' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const regions = destinations.find((item) => item.country === country)?.regions ?? []
   const currentStep = planId ? 2 : 1
   const nights = plan?.nights
   const days = nights === null || nights === undefined ? null : nights + 1
@@ -70,15 +74,8 @@ function PlannerPage() {
       return
     }
 
-    const nextRegion = region.trim()
-
-    if (!nextRegion) {
-      setError('여행 지역을 입력해 주세요.')
-      return
-    }
-
-    if (nextRegion.length > 80) {
-      setError('여행 지역은 80자 이하로 입력해 주세요.')
+    if (!country || !region) {
+      setError('나라와 지역을 선택해 주세요.')
       return
     }
 
@@ -86,7 +83,7 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({ region: nextRegion, nights: null, startDate: null })
+      const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -119,27 +116,65 @@ function PlannerPage() {
               <p>나라를 고르고, 원하는 장소를 검색해 주머니에 담아 보세요</p>
             </div>
             <div className="planner-search-tools">
-              <div className="planner-country">
+              <button
+                type="button"
+                className="planner-country"
+                aria-expanded={openMenu === 'country'}
+                disabled={Boolean(planId)}
+                onClick={() => setOpenMenu((current) => (current === 'country' ? null : 'country'))}
+              >
                 <img src={plannerGlobe} alt="" />
-                <span>{plan?.region ?? '지역'}</span>
+                <span>{plan?.country ?? (country || '나라')}</span>
                 <img src={plannerChevronDown} alt="" />
-              </div>
-              <label className="planner-query">
+              </button>
+              <button
+                type="button"
+                className="planner-query"
+                aria-expanded={openMenu === 'region'}
+                disabled={Boolean(planId) || !country}
+                onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
+              >
                 <img src={plannerSearch} alt="" />
-                {planId ? (
-                  <input value={plan?.region ?? ''} placeholder="장소를 검색해 주세요" readOnly />
-                ) : (
-                  <input
-                    value={region}
-                    placeholder="예: 교토"
-                    maxLength={80}
-                    onChange={(event) => setRegion(event.target.value)}
-                  />
-                )}
-              </label>
+                <span>{plan?.region ?? (region || '지역을 선택해 주세요')}</span>
+              </button>
             </div>
+            {openMenu === 'country' && (
+              <div className="planner-options" role="listbox" aria-label="나라">
+                {destinations.map((item) => (
+                  <button
+                    key={item.country}
+                    type="button"
+                    aria-selected={item.country === country}
+                    onClick={() => {
+                      setCountry(item.country)
+                      setRegion('')
+                      setOpenMenu('region')
+                    }}
+                  >
+                    {item.country}
+                  </button>
+                ))}
+              </div>
+            )}
+            {openMenu === 'region' && (
+              <div className="planner-options" role="listbox" aria-label="지역">
+                {regions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-selected={item === region}
+                    onClick={() => {
+                      setRegion(item)
+                      setOpenMenu(null)
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
             {!planId && (
-              <button type="submit" className="planner-start" disabled={isSaving}>
+              <button type="submit" className="planner-start" disabled={isSaving || !country || !region}>
                 이 지역으로 시작
               </button>
             )}

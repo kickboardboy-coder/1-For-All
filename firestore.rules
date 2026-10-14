@@ -8,6 +8,7 @@ rules_version = '2';
 // Document ID: auto-generated
 // Fields:
 //   - userId: string (required, immutable) - Firebase Auth uid of the owner
+//   - country: string (optional, 1-40) - travel country
 //   - region: string (required, 1-80) - travel region
 //   - nights: int or null (required, 0-60 when set) - number of nights
 //   - startDate: string YYYY-MM-DD or null (required) - departure date
@@ -27,9 +28,10 @@ service cloud.firestore {
     }
 
     function isValidPlan(data) {
-      return hasOnlyAllowedFields(['userId', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
+      return hasOnlyAllowedFields(['userId', 'country', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
         && data.userId is string
         && data.userId == request.auth.uid
+        && (!('country' in data) || (data.country is string && data.country.size() > 0 && data.country.size() <= 40))
         && data.region is string
         && data.region.size() > 0
         && data.region.size() <= 80

@@ -13,12 +13,13 @@ import { auth, db } from '../firebase'
 import { planStatuses, type Plan, type PlanStatus } from '../types/plan'
 
 type NewPlan = {
+  country: string
   region: string
   nights: number | null
   startDate: string | null
 }
 
-export async function savePlan({ region, nights, startDate }: NewPlan): Promise<Plan> {
+export async function savePlan({ country, region, nights, startDate }: NewPlan): Promise<Plan> {
   const user = auth.currentUser
 
   if (!user) {
@@ -27,6 +28,7 @@ export async function savePlan({ region, nights, startDate }: NewPlan): Promise<
 
   const plan = {
     userId: user.uid,
+    country,
     region,
     nights,
     startDate,
@@ -55,6 +57,7 @@ function toPlan(id: string, data: DocumentData): Plan | null {
   return {
     id,
     userId: data.userId,
+    country: typeof data.country === 'string' ? data.country : null,
     region: data.region,
     nights: typeof data.nights === 'number' ? data.nights : null,
     startDate: typeof data.startDate === 'string' ? data.startDate : null,
