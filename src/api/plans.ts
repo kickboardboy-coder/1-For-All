@@ -6,6 +6,7 @@ import {
   getDocs,
   orderBy,
   query,
+  updateDoc,
   where,
   type DocumentData,
 } from 'firebase/firestore'
@@ -38,6 +39,16 @@ export async function savePlan({ country, region, nights, startDate }: NewPlan):
   const docRef = await addDoc(collection(db, 'plans'), plan)
 
   return { id: docRef.id, ...plan }
+}
+
+export async function touchPlan(planId: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  await updateDoc(doc(db, 'plans', planId), { updatedAt: new Date().toISOString() })
 }
 
 function isPlanStatus(value: unknown): value is PlanStatus {

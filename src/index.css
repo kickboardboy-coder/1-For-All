@@ -615,10 +615,26 @@ body {
   cursor: pointer;
 }
 
-.planner-query span {
+.planner-query span,
+.planner-query input {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.planner-query input {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.planner-query input::placeholder {
+  color: #7a8983;
 }
 
 .planner-options {
@@ -706,8 +722,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 25px;
+  min-width: 25px;
   height: 25px;
+  padding: 0 6px;
   border-radius: 999px;
   background: #e8f4ef;
   color: #27846e;
@@ -738,6 +755,55 @@ body {
 .planner-pocket-empty {
   margin-top: 16px;
   color: #62766e;
+}
+
+.planner-places {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-places li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #f6f8f7;
+}
+
+.planner-places div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planner-places strong {
+  overflow: hidden;
+  color: #243d37;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-places li span {
+  color: #27846e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.planner-places button {
+  flex-shrink: 0;
+  color: #7a8983;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .planner-duration {
@@ -859,6 +925,12 @@ body {
 
 .planner-pocket button:disabled {
   opacity: 1;
+}
+
+.planner-pocket-heading button:disabled,
+.planner-places button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .not-found {
