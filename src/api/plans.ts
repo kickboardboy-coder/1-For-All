@@ -1,4 +1,14 @@
-import { addDoc, collection, getDocs, orderBy, query, where, type DocumentData } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  where,
+  type DocumentData,
+} from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { planStatuses, type Plan, type PlanStatus } from '../types/plan'
 
@@ -51,6 +61,28 @@ function toPlan(id: string, data: DocumentData): Plan | null {
     status: data.status,
     updatedAt: data.updatedAt,
   }
+}
+
+export async function getPlan(planId: string): Promise<Plan | null> {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const snapshot = await getDoc(doc(db, 'plans', planId))
+
+  if (!snapshot.exists()) {
+    return null
+  }
+
+  const plan = toPlan(snapshot.id, snapshot.data())
+
+  if (!plan || plan.userId !== user.uid) {
+    return null
+  }
+
+  return plan
 }
 
 export async function getPlans(): Promise<Plan[]> {
