@@ -20,6 +20,7 @@ function App() {
         </Route>
         <Route element={<RequireAuth />}>
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/planner/new" element={<PlannerPage />} />
           <Route path="/planner/:planId" element={<PlannerPage />} />
           <Route path="/result" element={<ResultPage />} />
         </Route>

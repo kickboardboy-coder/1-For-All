@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import planChevron from '../assets/plan-chevron.svg'
 import { planStatusLabel, type Plan } from '../types/plan'
 
 type PlanCardProps = {
@@ -6,7 +7,7 @@ type PlanCardProps = {
   isRecent: boolean
 }
 
-function formatTripLength(plan: Plan) {
+function formatPeriod(plan: Plan) {
   if (plan.nights === null) {
     return '날짜 미정'
   }
@@ -17,7 +18,18 @@ function formatTripLength(plan: Plan) {
     return length
   }
 
-  return `${length} · ${plan.startDate}`
+  const start = new Date(`${plan.startDate}T00:00:00`)
+
+  if (Number.isNaN(start.getTime())) {
+    return length
+  }
+
+  const end = new Date(start)
+  end.setDate(start.getDate() + plan.nights)
+  const startLabel = `${start.getMonth() + 1}월 ${start.getDate()}일`
+  const endLabel = `${end.getMonth() + 1}월 ${end.getDate()}일`
+
+  return `${startLabel} – ${endLabel} · ${length}`
 }
 
 function formatUpdatedAt(value: string) {
@@ -33,30 +45,35 @@ function formatUpdatedAt(value: string) {
   const dayDiff = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000)
 
   if (dayDiff <= 0) {
-    return '오늘'
+    return '오늘 수정'
   }
 
   if (dayDiff === 1) {
-    return '어제'
+    return '어제 수정'
   }
 
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 수정`
 }
 
 function PlanCard({ plan, isRecent }: PlanCardProps) {
   return (
-    <article className="plan-card">
+    <article className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
+      <div className="plan-card-thumb" aria-hidden="true" />
       <div className="plan-card-main">
         <div className="plan-card-title">
           <h2>{plan.region}</h2>
           {isRecent && <span className="plan-badge plan-badge-recent">최근 계획</span>}
           <span className={`plan-badge plan-badge-${plan.status}`}>{planStatusLabel[plan.status]}</span>
         </div>
-        <p>{formatTripLength(plan)}</p>
+        <p>{formatPeriod(plan)}</p>
+        <p className="plan-card-places">담은 장소 0곳</p>
       </div>
       <div className="plan-card-side">
         <p>{formatUpdatedAt(plan.updatedAt)}</p>
-        <Link to={`/planner/${plan.id}`}>열기</Link>
+        <Link to={`/planner/${plan.id}`}>
+          계획 열기
+          <img src={planChevron} alt="" />
+        </Link>
       </div>
     </article>
   )
