@@ -912,6 +912,12 @@ body {
   color: #27846e;
   font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-pocket .planner-save:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .planner-optimize-note,

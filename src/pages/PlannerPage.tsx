@@ -12,7 +12,7 @@ import plannerMinus from '../assets/planner-minus.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan } from '../api/plans'
+import { getPlan, savePlan, touchPlan } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import { destinations } from '../data/destinations'
 import type { Plan } from '../types/plan'
@@ -37,6 +37,7 @@ function PlannerPage() {
   const [placeName, setPlaceName] = useState('')
   const [category, setCategory] = useState<PlaceCategory>('sight')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
+  const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const regions = destinations.find((item) => item.country === country)?.regions ?? []
   const currentStep = planId ? 2 : 1
   const nights = plan?.nights
@@ -159,6 +160,23 @@ function PlannerPage() {
       setError('장소를 비우지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsUpdatingPlaces(false)
+    }
+  }
+
+  async function handleSavePlaces() {
+    if (!planId || !plan) {
+      return
+    }
+
+    setIsSavingPlaces(true)
+    setError('')
+
+    try {
+      await touchPlan(planId)
+      navigate('/plans')
+    } catch {
+      setError('장소를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      setIsSavingPlaces(false)
     }
   }
 
@@ -365,9 +383,14 @@ function PlannerPage() {
           <p className="planner-optimize-note">
             인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.
           </p>
-          <button type="button" className="planner-save" disabled>
+          <button
+            type="button"
+            className="planner-save"
+            disabled={!plan || isUpdatingPlaces || isSavingPlaces}
+            onClick={handleSavePlaces}
+          >
             <img src={plannerBookmark} alt="" />
-            장소만 저장하기
+            {isSavingPlaces ? '저장하는 중' : '장소만 저장하기'}
           </button>
           <p className="planner-save-note">
             장소만 담은 상태를 저장해두고, 나중에 기간과 출발일을 정한 뒤 AI 최적화를 진행할 수 있어요.
