@@ -46,6 +46,8 @@ function PlannerPage() {
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+  const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
   const searchTimer = useRef<number | null>(null)
   const regions = destinations.find((item) => item.country === country)?.regions ?? []
@@ -96,6 +98,7 @@ function PlannerPage() {
   function startSearch(query: string) {
     if (!query) {
       setSearchResults([])
+      setSelectedPlaceId(null)
       setIsSearching(false)
       return
     }
@@ -119,6 +122,7 @@ function PlannerPage() {
 
     if (!query) {
       setSearchResults([])
+      setSelectedPlaceId(null)
       setIsSearching(false)
       return
     }
@@ -345,10 +349,22 @@ function PlannerPage() {
             </button>
             {searchResults.length > 0 && (
               <ul className="planner-search-results">
-                {searchResults.map((result) => (
+                {searchResults.map((result, index) => (
                   <li key={result.id}>
-                    <strong>{result.name}</strong>
-                    {result.address && <span>{result.address}</span>}
+                    <button
+                      type="button"
+                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
+                      onClick={() => {
+                        setSelectedPlaceId(result.id)
+                        setMapFocus('place')
+                      }}
+                    >
+                      <span>{index + 1}</span>
+                      <span>
+                        <strong>{result.name}</strong>
+                        {result.address && <small>{result.address}</small>}
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -372,6 +388,8 @@ function PlannerPage() {
                 }
 
                 setSearchResults(results)
+                setSelectedPlaceId(results[0]?.id ?? null)
+                setMapFocus('results')
                 setIsSearching(false)
               }}
               onError={(query) => {
@@ -380,6 +398,7 @@ function PlannerPage() {
                 }
 
                 setSearchResults([])
+                setSelectedPlaceId(null)
                 setIsSearching(false)
                 setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')
               }}
@@ -390,6 +409,13 @@ function PlannerPage() {
             latitude={mapRegion?.latitude ?? 20}
             longitude={mapRegion?.longitude ?? 0}
             zoom={mapRegion ? 12 : 2}
+            places={searchResults}
+            selectedPlaceId={selectedPlaceId}
+            focus={mapFocus}
+            onSelectPlace={(placeId) => {
+              setSelectedPlaceId(placeId)
+              setMapFocus('place')
+            }}
           />
         </div>
         </MapsProvider>

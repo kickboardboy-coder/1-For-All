@@ -1,14 +1,19 @@
 import { useEffect } from 'react'
-import { Map, useMap } from '@vis.gl/react-google-maps'
+import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
+import type { PlaceSearchResult } from './PlaceSearchRunner'
 import { useMapsStatus } from './MapsProvider'
 
 type PlannerMapProps = {
   latitude: number
   longitude: number
   zoom: number
+  places: PlaceSearchResult[]
+  selectedPlaceId: string | null
+  focus: 'results' | 'place'
+  onSelectPlace: (placeId: string) => void
 }
 
-function MapCamera({ latitude, longitude, zoom }: PlannerMapProps) {
+function MapCamera({ latitude, longitude, zoom }: Pick<PlannerMapProps, 'latitude' | 'longitude' | 'zoom'>) {
   const map = useMap()
 
   useEffect(() => {
@@ -18,8 +23,60 @@ function MapCamera({ latitude, longitude, zoom }: PlannerMapProps) {
   return null
 }
 
-function PlannerMap({ latitude, longitude, zoom }: PlannerMapProps) {
+function MapPlaces({
+  places,
+  selectedPlaceId,
+  focus,
+  onSelectPlace,
+}: Pick<PlannerMapProps, 'places' | 'selectedPlaceId' | 'focus' | 'onSelectPlace'>) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!map || places.length === 0) {
+      return
+    }
+
+    const selected = places.find((place) => place.id === selectedPlaceId)
+
+    if (focus === 'place' && selected) {
+      map.moveCamera({ center: { lat: selected.latitude, lng: selected.longitude }, zoom: 15 })
+      return
+    }
+
+    if (places.length === 1) {
+      map.moveCamera({ center: { lat: places[0].latitude, lng: places[0].longitude }, zoom: 15 })
+      return
+    }
+
+    const latitudes = places.map((place) => place.latitude)
+    const longitudes = places.map((place) => place.longitude)
+    map.fitBounds({
+      north: Math.max(...latitudes),
+      south: Math.min(...latitudes),
+      east: Math.max(...longitudes),
+      west: Math.min(...longitudes),
+    })
+  }, [map, places, selectedPlaceId, focus])
+
+  return (
+    <>
+      {places.map((place, index) => (
+        <Marker
+          key={place.id}
+          position={{ lat: place.latitude, lng: place.longitude }}
+          title={place.name}
+          label={{ text: String(index + 1), color: '#ffffff', fontWeight: '700' }}
+          zIndex={place.id === selectedPlaceId ? 2 : 1}
+          onClick={() => onSelectPlace(place.id)}
+        />
+      ))}
+    </>
+  )
+}
+
+function PlannerMap({ latitude, longitude, zoom, places, selectedPlaceId, focus, onSelectPlace }: PlannerMapProps) {
   const status = useMapsStatus()
+  const selectedPlace = places.find((place) => place.id === selectedPlaceId) ?? null
 
   if (status !== 'ready') {
     return (
@@ -39,7 +96,17 @@ function PlannerMap({ latitude, longitude, zoom }: PlannerMapProps) {
         colorScheme="LIGHT"
       >
         <MapCamera latitude={latitude} longitude={longitude} zoom={zoom} />
+        <MapPlaces places={places} selectedPlaceId={selectedPlaceId} focus={focus} onSelectPlace={onSelectPlace} />
       </Map>
+      {selectedPlace && (
+        <article className="planner-place-card">
+          <span>{places.findIndex((place) => place.id === selectedPlace.id) + 1}</span>
+          <div>
+            <strong>{selectedPlace.name}</strong>
+            {selectedPlace.address && <p>{selectedPlace.address}</p>}
+          </div>
+        </article>
+      )}
     </div>
   )
 }
