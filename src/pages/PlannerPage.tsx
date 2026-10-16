@@ -13,8 +13,8 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan } from '../api/plans'
-import { clearPlaces, deletePlace, getPlaces } from '../api/places'
+import { getPlan, savePlan, touchPlan, updatePlanDestination } from '../api/plans'
+import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
@@ -44,15 +44,19 @@ function PlannerPage() {
   const [category, setCategory] = useState<PlaceCategory>('sight')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
+  const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
   const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
   const searchTimer = useRef<number | null>(null)
-  const regions = destinations.find((item) => item.country === country)?.regions ?? []
-  const mapRegion = findRegion(plan?.country ?? country, plan?.region ?? region)
-  const currentStep = planId ? 2 : 1
+  const destinationMenu = useRef<HTMLDivElement>(null)
+  const activeCountry = country || plan?.country || ''
+  const activeRegion = currentStep === 1 ? region : region || plan?.region || ''
+  const regions = destinations.find((item) => item.country === activeCountry)?.regions ?? []
+  const mapRegion = findRegion(activeCountry, activeRegion)
+  const editingDestination = Boolean(planId) && currentStep === 1
   const nights = plan?.nights
   const days = nights === null || nights === undefined ? null : nights + 1
 
@@ -75,6 +79,8 @@ function PlannerPage() {
         }
 
         setPlan(nextPlan)
+        setCountry(nextPlan.country ?? '')
+        setRegion(nextPlan.region)
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
@@ -92,6 +98,36 @@ function PlannerPage() {
       ignore = true
     }
   }, [planId])
+
+  useEffect(() => {
+    setCurrentStep(planId ? 2 : 1)
+  }, [planId])
+
+  useEffect(() => {
+    if (!openMenu) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!destinationMenu.current?.contains(event.target as Node)) {
+        setOpenMenu(null)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpenMenu(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openMenu])
 
   const canSearch = Boolean(planId || region)
 
@@ -161,6 +197,52 @@ function PlannerPage() {
     await handleSearch()
   }
 
+  function handleChooseCountryStep() {
+    if (!planId || currentStep === 1) {
+      return
+    }
+
+    setCountry(plan?.country ?? country)
+    setRegion(plan?.region ?? region)
+    setOpenMenu('country')
+    setCurrentStep(1)
+  }
+
+  async function handleChooseRegion(nextRegion: string) {
+    const nextCountry = country || plan?.country || ''
+    setRegion(nextRegion)
+    setOpenMenu(null)
+
+    if (!planId || !plan || !nextCountry) {
+      return
+    }
+
+    if (plan.country === nextCountry && plan.region === nextRegion) {
+      setCurrentStep(2)
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanDestination(planId, nextCountry, nextRegion)
+      if (places.length > 0) {
+        await clearPlaces(planId)
+        setPlaces([])
+      }
+      setPlan({ ...plan, country: nextCountry, region: nextRegion, updatedAt })
+      setPlaceName('')
+      setSearchResults([])
+      setSelectedPlaceId(null)
+      setCurrentStep(2)
+    } catch {
+      setError('나라와 지역을 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function handleCreatePlan() {
     if (!country || !region) {
       setError('나라와 지역을 선택해 주세요.')
@@ -176,6 +258,56 @@ function PlannerPage() {
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
       setIsSaving(false)
+    }
+  }
+
+  async function handleAddToPocket(result: PlaceSearchResult) {
+    if (places.some((place) => place.name === result.name)) {
+      return
+    }
+
+    setIsUpdatingPlaces(true)
+    setError('')
+
+    let nextPlanId = planId
+
+    try {
+      if (!nextPlanId) {
+        if (!country || !region) {
+          setError('나라와 지역을 선택해 주세요.')
+          return
+        }
+
+        const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
+        nextPlanId = nextPlan.id
+      }
+
+      const place = await addPlace(nextPlanId, {
+        name: result.name,
+        category,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      })
+
+      if (planId) {
+        setPlaces((current) => [...current, place].sort((left, right) => left.name.localeCompare(right.name, 'ko')))
+        return
+      }
+
+      navigate(`/planner/${nextPlanId}`, { replace: true })
+    } catch (error) {
+      console.error(error)
+      const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : ''
+      setError(
+        code === 'permission-denied'
+          ? '장소를 담지 못했습니다. 저장 권한을 확인해 주세요.'
+          : '장소를 담지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      )
+      if (!planId && nextPlanId) {
+        navigate(`/planner/${nextPlanId}`, { replace: true })
+      }
+    } finally {
+      setIsUpdatingPlaces(false)
     }
   }
 
@@ -242,8 +374,30 @@ function PlannerPage() {
         <ol className="planner-steps">
           {steps.map((step, index) => (
             <li key={step.number} className={step.number === currentStep ? 'is-current' : undefined}>
-              <span>{step.number}</span>
-              {step.label}
+              {step.number < 3 ? (
+                <button
+                  type="button"
+                  disabled={step.number === 1 ? !planId || currentStep === 1 : !planId || currentStep === 2}
+                  onClick={() => {
+                    if (step.number === 1) {
+                      handleChooseCountryStep()
+                      return
+                    }
+
+                    setCountry(plan?.country ?? '')
+                    setRegion(plan?.region ?? '')
+                    setCurrentStep(2)
+                  }}
+                >
+                  <span>{step.number}</span>
+                  {step.label}
+                </button>
+              ) : (
+                <>
+                  <span>{step.number}</span>
+                  {step.label}
+                </>
+              )}
               {index < steps.length - 1 && <img src={plannerChevron} alt="" />}
             </li>
           ))}
@@ -257,40 +411,78 @@ function PlannerPage() {
               <p>어디로 떠나시나요?</p>
               <p>나라를 고르고, 원하는 장소를 검색해 주머니에 담아 보세요</p>
             </div>
-            <div className="planner-search-tools">
-              <button
-                type="button"
-                className="planner-country"
-                aria-expanded={openMenu === 'country'}
-                disabled={Boolean(planId)}
-                onClick={() => setOpenMenu((current) => (current === 'country' ? null : 'country'))}
-              >
-                <img src={plannerGlobe} alt="" />
-                <span>{plan?.country ?? (country || '나라')}</span>
-                <img src={plannerChevronDown} alt="" />
-              </button>
-              <button
-                type="button"
-                className="planner-query planner-region"
-                aria-expanded={openMenu === 'region'}
-                disabled={Boolean(planId) || !country}
-                onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
-              >
-                <img src={plannerPin} alt="" />
-                <span>{plan?.region ?? (region || '지역')}</span>
-                <img src={plannerChevronDown} alt="" />
-              </button>
+            <div className="planner-search-tools" ref={destinationMenu}>
+              <div className={openMenu === 'country' ? 'planner-dropdown is-open' : 'planner-dropdown'}>
+                <button
+                  type="button"
+                  className="planner-country"
+                  aria-expanded={openMenu === 'country'}
+                  disabled={currentStep !== 1}
+                  onClick={() => setOpenMenu((current) => (current === 'country' ? null : 'country'))}
+                >
+                  <img src={plannerGlobe} alt="" />
+                  <span>{activeCountry || '나라'}</span>
+                  <img src={plannerChevronDown} alt="" />
+                </button>
+                {openMenu === 'country' && (
+                  <ul className="planner-dropdown-menu" role="listbox" aria-label="나라">
+                    {destinations.map((item) => (
+                      <li key={item.country}>
+                        <button
+                          type="button"
+                          aria-selected={item.country === activeCountry}
+                          onClick={() => {
+                            setCountry(item.country)
+                            setRegion('')
+                            setOpenMenu('region')
+                          }}
+                        >
+                          {item.country}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className={openMenu === 'region' ? 'planner-dropdown is-open' : 'planner-dropdown'}>
+                <button
+                  type="button"
+                  className="planner-region"
+                  aria-expanded={openMenu === 'region'}
+                  disabled={currentStep !== 1 || !activeCountry}
+                  onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
+                >
+                  <img src={plannerPin} alt="" />
+                  <span>{activeRegion || '지역'}</span>
+                  <img src={plannerChevronDown} alt="" />
+                </button>
+                {openMenu === 'region' && (
+                  <ul className="planner-dropdown-menu" role="listbox" aria-label="지역">
+                    {regions.map((item) => (
+                      <li key={item.name}>
+                        <button
+                          type="button"
+                          aria-selected={item.name === activeRegion}
+                          onClick={() => handleChooseRegion(item.name)}
+                        >
+                          {item.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <label className="planner-query">
                 <img src={plannerSearch} alt="" />
                 <input
                   value={placeName}
                   placeholder="장소를 입력해 주세요"
-                  disabled={!canSearch}
+                  disabled={!canSearch || editingDestination}
                   onChange={(event) => setPlaceName(event.target.value)}
                 />
               </label>
             </div>
-            {planId && (
+            {canSearch && (
               <div className="planner-options" role="listbox" aria-label="장소 분류">
                 {placeCategories.map((item) => (
                   <button
@@ -304,47 +496,12 @@ function PlannerPage() {
                 ))}
               </div>
             )}
-            {openMenu === 'country' && (
-              <div className="planner-options" role="listbox" aria-label="나라">
-                {destinations.map((item) => (
-                  <button
-                    key={item.country}
-                    type="button"
-                    aria-selected={item.country === country}
-                    onClick={() => {
-                      setCountry(item.country)
-                      setRegion('')
-                      setOpenMenu('region')
-                    }}
-                  >
-                    {item.country}
-                  </button>
-                ))}
-              </div>
-            )}
-            {openMenu === 'region' && (
-              <div className="planner-options" role="listbox" aria-label="지역">
-                {regions.map((item) => (
-                  <button
-                    key={item.name}
-                    type="button"
-                    aria-selected={item.name === region}
-                    onClick={() => {
-                      setRegion(item.name)
-                      setOpenMenu(null)
-                    }}
-                  >
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-            )}
             {!planId && (
               <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
                 이 지역으로 시작
               </button>
             )}
-            <button type="submit" className="planner-start" disabled={!canSearch || isSearching || !placeName.trim()}>
+            <button type="submit" className="planner-start" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
               {isSearching ? '검색 중' : '검색'}
             </button>
             {searchResults.length > 0 && (
@@ -416,6 +573,9 @@ function PlannerPage() {
               setSelectedPlaceId(placeId)
               setMapFocus('place')
             }}
+            savedPlaceNames={places.map((place) => place.name)}
+            isAddingPlace={isUpdatingPlaces}
+            onAddPlace={handleAddToPocket}
           />
         </div>
         </MapsProvider>

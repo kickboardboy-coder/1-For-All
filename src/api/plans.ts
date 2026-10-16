@@ -41,6 +41,18 @@ export async function savePlan({ country, region, nights, startDate }: NewPlan):
   return { id: docRef.id, ...plan }
 }
 
+export async function updatePlanDestination(planId: string, country: string, region: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const updatedAt = new Date().toISOString()
+  await updateDoc(doc(db, 'plans', planId), { country, region, updatedAt })
+  return updatedAt
+}
+
 export async function touchPlan(planId: string) {
   const user = auth.currentUser
 

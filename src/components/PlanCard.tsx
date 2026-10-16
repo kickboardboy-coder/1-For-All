@@ -1,5 +1,4 @@
 import { Link } from 'react-router'
-import planChevron from '../assets/plan-chevron.svg'
 import { planStatusLabel, type Plan } from '../types/plan'
 
 type PlanCardProps = {
@@ -60,7 +59,7 @@ function formatUpdatedAt(value: string) {
 
 function PlanCard({ plan, isRecent, placeCount }: PlanCardProps) {
   return (
-    <article className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
+    <Link to={`/planner/${plan.id}`} className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
       <div className="plan-card-thumb" aria-hidden="true" />
       <div className="plan-card-main">
         <div className="plan-card-title">
@@ -73,12 +72,8 @@ function PlanCard({ plan, isRecent, placeCount }: PlanCardProps) {
       </div>
       <div className="plan-card-side">
         <p>{formatUpdatedAt(plan.updatedAt)}</p>
-        <Link to={`/planner/${plan.id}`}>
-          계획 열기
-          <img src={planChevron} alt="" />
-        </Link>
       </div>
-    </article>
+    </Link>
   )
 }
 

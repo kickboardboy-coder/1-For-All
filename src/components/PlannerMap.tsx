@@ -11,6 +11,9 @@ type PlannerMapProps = {
   selectedPlaceId: string | null
   focus: 'results' | 'place'
   onSelectPlace: (placeId: string) => void
+  savedPlaceNames: string[]
+  isAddingPlace: boolean
+  onAddPlace: (place: PlaceSearchResult) => void
 }
 
 function MapCamera({ latitude, longitude, zoom }: Pick<PlannerMapProps, 'latitude' | 'longitude' | 'zoom'>) {
@@ -74,7 +77,18 @@ function MapPlaces({
   )
 }
 
-function PlannerMap({ latitude, longitude, zoom, places, selectedPlaceId, focus, onSelectPlace }: PlannerMapProps) {
+function PlannerMap({
+  latitude,
+  longitude,
+  zoom,
+  places,
+  selectedPlaceId,
+  focus,
+  onSelectPlace,
+  savedPlaceNames,
+  isAddingPlace,
+  onAddPlace,
+}: PlannerMapProps) {
   const status = useMapsStatus()
   const selectedPlace = places.find((place) => place.id === selectedPlaceId) ?? null
 
@@ -105,6 +119,13 @@ function PlannerMap({ latitude, longitude, zoom, places, selectedPlaceId, focus,
             <strong>{selectedPlace.name}</strong>
             {selectedPlace.address && <p>{selectedPlace.address}</p>}
           </div>
+          <button
+            type="button"
+            disabled={isAddingPlace || savedPlaceNames.includes(selectedPlace.name)}
+            onClick={() => onAddPlace(selectedPlace)}
+          >
+            {savedPlaceNames.includes(selectedPlace.name) ? '담김' : '주머니에 담기'}
+          </button>
         </article>
       )}
     </div>
