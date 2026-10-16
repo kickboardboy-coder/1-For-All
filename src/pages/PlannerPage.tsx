@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import plannerArrow from '../assets/planner-arrow.svg'
 import plannerBag from '../assets/planner-bag.svg'
@@ -21,6 +21,8 @@ import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
 import type { Plan } from '../types/plan'
 import { placeCategories, placeCategoryLabel, type Place, type PlaceCategory } from '../types/place'
+
+const searchDebounceMs = 400
 
 const steps = [
   { number: 1, label: '나라 선택' },
@@ -45,6 +47,7 @@ function PlannerPage() {
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const searchTimer = useRef<number | null>(null)
   const regions = destinations.find((item) => item.country === country)?.regions ?? []
   const mapRegion = findRegion(plan?.country ?? country, plan?.region ?? region)
   const currentStep = planId ? 2 : 1
@@ -90,11 +93,10 @@ function PlannerPage() {
 
   const canSearch = Boolean(planId || region)
 
-  async function handleSearch() {
-    const query = placeName.trim()
-
+  function startSearch(query: string) {
     if (!query) {
-      setError('검색할 장소를 입력해 주세요.')
+      setSearchResults([])
+      setIsSearching(false)
       return
     }
 
@@ -106,6 +108,48 @@ function PlannerPage() {
     setError('')
     setIsSearching(true)
     setSearchRequest({ id: Date.now(), query })
+  }
+
+  useEffect(() => {
+    if (!canSearch) {
+      return
+    }
+
+    const query = placeName.trim()
+
+    if (!query) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    searchTimer.current = window.setTimeout(() => {
+      searchTimer.current = null
+      startSearch(query)
+    }, searchDebounceMs)
+
+    return () => {
+      if (searchTimer.current !== null) {
+        window.clearTimeout(searchTimer.current)
+        searchTimer.current = null
+      }
+    }
+  }, [placeName, canSearch])
+
+  function handleSearch() {
+    const query = placeName.trim()
+
+    if (searchTimer.current !== null) {
+      window.clearTimeout(searchTimer.current)
+      searchTimer.current = null
+    }
+
+    if (!query) {
+      setError('검색할 장소를 입력해 주세요.')
+      return
+    }
+
+    startSearch(query)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -237,11 +281,8 @@ function PlannerPage() {
                 <input
                   value={placeName}
                   placeholder="장소를 입력해 주세요"
-                  disabled={!canSearch || isSearching}
-                  onChange={(event) => {
-                    setPlaceName(event.target.value)
-                    setSearchResults([])
-                  }}
+                  disabled={!canSearch}
+                  onChange={(event) => setPlaceName(event.target.value)}
                 />
               </label>
             </div>
@@ -325,11 +366,19 @@ function PlannerPage() {
               latitude={mapRegion?.latitude ?? null}
               longitude={mapRegion?.longitude ?? null}
               regionName={mapRegion?.name ?? plan?.region ?? null}
-              onSuccess={(results) => {
+              onSuccess={(query, results) => {
+                if (query !== placeName.trim()) {
+                  return
+                }
+
                 setSearchResults(results)
                 setIsSearching(false)
               }}
-              onError={() => {
+              onError={(query) => {
+                if (query !== placeName.trim()) {
+                  return
+                }
+
                 setSearchResults([])
                 setIsSearching(false)
                 setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')

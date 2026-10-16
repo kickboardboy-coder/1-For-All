@@ -19,8 +19,8 @@ type PlaceSearchRunnerProps = {
   latitude: number | null
   longitude: number | null
   regionName: string | null
-  onSuccess: (results: PlaceSearchResult[]) => void
-  onError: () => void
+  onSuccess: (query: string, results: PlaceSearchResult[]) => void
+  onError: (query: string) => void
 }
 
 type SearchedPlace = {
@@ -75,14 +75,17 @@ function PlaceSearchRunner({ request, latitude, longitude, regionName, onSuccess
           return
         }
 
-        onSuccessRef.current(found.flatMap((place) => {
-          const result = toResult(place)
-          return result ? [result] : []
-        }))
+        onSuccessRef.current(
+          request.query,
+          found.flatMap((place) => {
+            const result = toResult(place)
+            return result ? [result] : []
+          }),
+        )
       })
       .catch(() => {
         if (!ignore) {
-          onErrorRef.current()
+          onErrorRef.current(request.query)
         }
       })
 
