@@ -14,7 +14,8 @@ import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getPlan, savePlan, touchPlan } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
-import { destinations } from '../data/destinations'
+import PlannerMap from '../components/PlannerMap'
+import { destinations, findRegion } from '../data/destinations'
 import type { Plan } from '../types/plan'
 import { placeCategories, placeCategoryLabel, type Place, type PlaceCategory } from '../types/place'
 
@@ -39,6 +40,7 @@ function PlannerPage() {
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const regions = destinations.find((item) => item.country === country)?.regions ?? []
+  const mapRegion = findRegion(plan?.country ?? country, plan?.region ?? region)
   const currentStep = planId ? 2 : 1
   const nights = plan?.nights
   const days = nights === null || nights === undefined ? null : nights + 1
@@ -275,15 +277,15 @@ function PlannerPage() {
               <div className="planner-options" role="listbox" aria-label="지역">
                 {regions.map((item) => (
                   <button
-                    key={item}
+                    key={item.name}
                     type="button"
-                    aria-selected={item === region}
+                    aria-selected={item.name === region}
                     onClick={() => {
-                      setRegion(item)
+                      setRegion(item.name)
                       setOpenMenu(null)
                     }}
                   >
-                    {item}
+                    {item.name}
                   </button>
                 ))}
               </div>
@@ -301,7 +303,11 @@ function PlannerPage() {
               </p>
             )}
           </form>
-          <div className="planner-map">지도</div>
+          <PlannerMap
+            latitude={mapRegion?.latitude ?? 20}
+            longitude={mapRegion?.longitude ?? 0}
+            zoom={mapRegion ? 12 : 2}
+          />
         </div>
         <aside className="planner-pocket">
           <div className="planner-pocket-heading">
