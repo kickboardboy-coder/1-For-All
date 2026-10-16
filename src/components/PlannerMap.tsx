@@ -94,8 +94,12 @@ function PlannerMap({
 
   if (status !== 'ready') {
     return (
-      <div className="planner-map">
-        <p>{status === 'missing' ? '구글 지도 API 키를 설정해 주세요.' : '지도를 불러오지 못했습니다.'}</p>
+      <div className="planner-map" role="alert">
+        <p>
+          {status === 'missing'
+            ? '구글 지도 API 키를 설정해 주세요.'
+            : '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+        </p>
       </div>
     )
   }

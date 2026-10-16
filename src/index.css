@@ -752,6 +752,12 @@ body {
   opacity: 0.7;
 }
 
+.planner-search-empty {
+  margin: 0;
+  color: #62766e;
+  font-size: 13px;
+}
+
 .planner-search-results {
   display: flex;
   flex-direction: column;
@@ -827,7 +833,12 @@ body {
 }
 
 .planner-map p {
+  max-width: 280px;
   margin: auto;
+  color: #62766e;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .planner-map-canvas {

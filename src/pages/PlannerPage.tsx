@@ -15,7 +15,7 @@ import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getPlan, savePlan, touchPlan, updatePlanDestination } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
-import MapsProvider, { WhenMapsReady } from '../components/MapsProvider'
+import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
@@ -50,7 +50,9 @@ function PlannerPage() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
   const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
+  const [emptySearchQuery, setEmptySearchQuery] = useState<string | null>(null)
   const searchTimer = useRef<number | null>(null)
+  const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
   const activeCountry = country || plan?.country || ''
   const activeRegion = currentStep === 1 ? region : region || plan?.region || ''
@@ -135,16 +137,25 @@ function PlannerPage() {
     if (!query) {
       setSearchResults([])
       setSelectedPlaceId(null)
+      setEmptySearchQuery(null)
       setIsSearching(false)
       return
     }
 
-    if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+    if (mapsStatus.current === 'missing' || !import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+      setIsSearching(false)
       setError('구글 지도 API 키를 설정해 주세요.')
       return
     }
 
+    if (mapsStatus.current === 'failed') {
+      setIsSearching(false)
+      setError('지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      return
+    }
+
     setError('')
+    setEmptySearchQuery(null)
     setIsSearching(true)
     setSearchRequest({ id: Date.now(), query })
   }
@@ -405,6 +416,7 @@ function PlannerPage() {
       </div>
       <div className="planner-workspace">
         <MapsProvider>
+        <MapsStatusBridge statusRef={mapsStatus} />
         <div className="planner-explore">
           <form className="planner-search" onSubmit={handleSubmit}>
             <div className="planner-search-label">
@@ -504,6 +516,11 @@ function PlannerPage() {
             <button type="submit" className="planner-start" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
               {isSearching ? '검색 중' : '검색'}
             </button>
+            {!isSearching && !error && emptySearchQuery === placeName.trim() && (
+              <p className="planner-search-empty" role="status">
+                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
+              </p>
+            )}
             {searchResults.length > 0 && (
               <ul className="planner-search-results">
                 {searchResults.map((result, index) => (
@@ -546,6 +563,7 @@ function PlannerPage() {
 
                 setSearchResults(results)
                 setSelectedPlaceId(results[0]?.id ?? null)
+                setEmptySearchQuery(results.length === 0 ? query : null)
                 setMapFocus('results')
                 setIsSearching(false)
               }}
@@ -556,6 +574,7 @@ function PlannerPage() {
 
                 setSearchResults([])
                 setSelectedPlaceId(null)
+                setEmptySearchQuery(null)
                 setIsSearching(false)
                 setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')
               }}
@@ -675,6 +694,12 @@ function PlannerPage() {
       </div>
     </section>
   )
+}
+
+function MapsStatusBridge({ statusRef }: { statusRef: { current: 'ready' | 'missing' | 'failed' } }) {
+  const status = useMapsStatus()
+  statusRef.current = status
+  return null
 }
 
 export default PlannerPage
