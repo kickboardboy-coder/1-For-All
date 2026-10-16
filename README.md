@@ -100,6 +100,7 @@ flowchart TD
 ## 🛠️ 기술 스택 (Tech Stack)
 
 - **Frontend:** TypeScript, React, Vite
+- **Backend:** Firebase Authentication, Cloud Firestore
 - **Design & Tools:** Figma
 - **Code Quality:** ESLint, Prettier
 

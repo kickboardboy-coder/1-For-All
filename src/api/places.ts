@@ -17,6 +17,8 @@ import { placeCategories, type Place, type PlaceCategory } from '../types/place'
 type NewPlace = {
   name: string
   category: PlaceCategory
+  latitude: number
+  longitude: number
 }
 
 function placesCollection(planId: string) {
@@ -69,14 +71,14 @@ export async function getPlaceCount(planId: string): Promise<number> {
   return snapshot.data().count
 }
 
-export async function addPlace(planId: string, { name, category }: NewPlace): Promise<Place> {
+export async function addPlace(planId: string, { name, category, latitude, longitude }: NewPlace): Promise<Place> {
   requireUser()
 
   const place = {
     planId,
     name: name.trim(),
-    latitude: 0,
-    longitude: 0,
+    latitude,
+    longitude,
     category,
     openingHours: null,
     closedDays: null,

@@ -19,7 +19,7 @@ rules_version = '2';
 // Document ID: auto-generated
 // Fields:
 //   - planId: string (required, immutable) - parent plan id
-//   - name: string (required, 1-80) - place name
+//   - name: string (required, 1-300 bytes) - place name
 //   - latitude: number (required, -90 to 90)
 //   - longitude: number (required, -180 to 180)
 //   - category: string (required) - sight, food, or stay
@@ -51,7 +51,7 @@ service cloud.firestore {
         && (data.startDate == null || (data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))
         && data.status in ['pending', 'optimized']
         && data.updatedAt is string
-        && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T');
+        && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
     }
 
     function isPlanOwner(planId) {
@@ -68,7 +68,7 @@ service cloud.firestore {
         && request.resource.data.planId == planId
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 80
+        && request.resource.data.name.size() <= 300
         && request.resource.data.latitude is number
         && request.resource.data.latitude >= -90
         && request.resource.data.latitude <= 90
