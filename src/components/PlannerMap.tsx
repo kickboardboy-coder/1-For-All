@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react'
-import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps'
+import { useEffect } from 'react'
+import { Map, useMap } from '@vis.gl/react-google-maps'
+import { useMapsStatus } from './MapsProvider'
 
 type PlannerMapProps = {
   latitude: number
   longitude: number
   zoom: number
 }
-
-const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
 function MapCamera({ latitude, longitude, zoom }: PlannerMapProps) {
   const map = useMap()
@@ -20,29 +19,27 @@ function MapCamera({ latitude, longitude, zoom }: PlannerMapProps) {
 }
 
 function PlannerMap({ latitude, longitude, zoom }: PlannerMapProps) {
-  const [loadError, setLoadError] = useState(false)
+  const status = useMapsStatus()
 
-  if (!apiKey || loadError) {
+  if (status !== 'ready') {
     return (
       <div className="planner-map">
-        <p>{apiKey ? '지도를 불러오지 못했습니다.' : '구글 지도 API 키를 설정해 주세요.'}</p>
+        <p>{status === 'missing' ? '구글 지도 API 키를 설정해 주세요.' : '지도를 불러오지 못했습니다.'}</p>
       </div>
     )
   }
 
   return (
     <div className="planner-map">
-      <APIProvider apiKey={apiKey} language="ko" region="KR" onError={() => setLoadError(true)}>
-        <Map
-          className="planner-map-canvas"
-          defaultCenter={{ lat: latitude, lng: longitude }}
-          defaultZoom={zoom}
-          gestureHandling="greedy"
-          colorScheme="LIGHT"
-        >
-          <MapCamera latitude={latitude} longitude={longitude} zoom={zoom} />
-        </Map>
-      </APIProvider>
+      <Map
+        className="planner-map-canvas"
+        defaultCenter={{ lat: latitude, lng: longitude }}
+        defaultZoom={zoom}
+        gestureHandling="greedy"
+        colorScheme="LIGHT"
+      >
+        <MapCamera latitude={latitude} longitude={longitude} zoom={zoom} />
+      </Map>
     </div>
   )
 }

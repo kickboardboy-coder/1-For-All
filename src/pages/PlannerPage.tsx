@@ -9,11 +9,14 @@ import plannerChevronDown from '../assets/planner-chevron-down.svg'
 import plannerChevron from '../assets/planner-chevron.svg'
 import plannerGlobe from '../assets/planner-globe.svg'
 import plannerMinus from '../assets/planner-minus.svg'
+import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getPlan, savePlan, touchPlan } from '../api/plans'
-import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
+import { clearPlaces, deletePlace, getPlaces } from '../api/places'
+import MapsProvider, { WhenMapsReady } from '../components/MapsProvider'
+import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
 import type { Plan } from '../types/plan'
@@ -39,6 +42,9 @@ function PlannerPage() {
   const [category, setCategory] = useState<PlaceCategory>('sight')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
+  const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
+  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const regions = destinations.find((item) => item.country === country)?.regions ?? []
   const mapRegion = findRegion(plan?.country ?? country, plan?.region ?? region)
   const currentStep = planId ? 2 : 1
@@ -82,14 +88,32 @@ function PlannerPage() {
     }
   }, [planId])
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  const canSearch = Boolean(planId || region)
 
-    if (planId) {
-      await handleAddPlace()
+  async function handleSearch() {
+    const query = placeName.trim()
+
+    if (!query) {
+      setError('검색할 장소를 입력해 주세요.')
       return
     }
 
+    if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+      setError('구글 지도 API 키를 설정해 주세요.')
+      return
+    }
+
+    setError('')
+    setIsSearching(true)
+    setSearchRequest({ id: Date.now(), query })
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await handleSearch()
+  }
+
+  async function handleCreatePlan() {
     if (!country || !region) {
       setError('나라와 지역을 선택해 주세요.')
       return
@@ -104,28 +128,6 @@ function PlannerPage() {
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
       setIsSaving(false)
-    }
-  }
-
-  async function handleAddPlace() {
-    const name = placeName.trim()
-
-    if (!planId || !name) {
-      setError('장소 이름을 입력해 주세요.')
-      return
-    }
-
-    setIsUpdatingPlaces(true)
-    setError('')
-
-    try {
-      const place = await addPlace(planId, { name, category })
-      setPlaces((current) => [...current, place].sort((left, right) => left.name.localeCompare(right.name, 'ko')))
-      setPlaceName('')
-    } catch {
-      setError('장소를 담지 못했습니다. 잠시 후 다시 시도해 주세요.')
-    } finally {
-      setIsUpdatingPlaces(false)
     }
   }
 
@@ -200,6 +202,7 @@ function PlannerPage() {
         </ol>
       </div>
       <div className="planner-workspace">
+        <MapsProvider>
         <div className="planner-explore">
           <form className="planner-search" onSubmit={handleSubmit}>
             <div className="planner-search-label">
@@ -218,28 +221,29 @@ function PlannerPage() {
                 <span>{plan?.country ?? (country || '나라')}</span>
                 <img src={plannerChevronDown} alt="" />
               </button>
-              {planId ? (
-                <label className="planner-query">
-                  <img src={plannerSearch} alt="" />
-                  <input
-                    value={placeName}
-                    placeholder="장소를 입력해 주세요"
-                    disabled={!plan || isUpdatingPlaces}
-                    onChange={(event) => setPlaceName(event.target.value)}
-                  />
-                </label>
-              ) : (
-                <button
-                  type="button"
-                  className="planner-query"
-                  aria-expanded={openMenu === 'region'}
-                  disabled={!country}
-                  onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
-                >
-                  <img src={plannerSearch} alt="" />
-                  <span>{region || '지역을 선택해 주세요'}</span>
-                </button>
-              )}
+              <button
+                type="button"
+                className="planner-query planner-region"
+                aria-expanded={openMenu === 'region'}
+                disabled={Boolean(planId) || !country}
+                onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
+              >
+                <img src={plannerPin} alt="" />
+                <span>{plan?.region ?? (region || '지역')}</span>
+                <img src={plannerChevronDown} alt="" />
+              </button>
+              <label className="planner-query">
+                <img src={plannerSearch} alt="" />
+                <input
+                  value={placeName}
+                  placeholder="장소를 입력해 주세요"
+                  disabled={!canSearch || isSearching}
+                  onChange={(event) => {
+                    setPlaceName(event.target.value)
+                    setSearchResults([])
+                  }}
+                />
+              </label>
             </div>
             {planId && (
               <div className="planner-options" role="listbox" aria-label="장소 분류">
@@ -290,25 +294,56 @@ function PlannerPage() {
                 ))}
               </div>
             )}
-            <button
-              type="submit"
-              className="planner-start"
-              disabled={planId ? isUpdatingPlaces || !placeName.trim() : isSaving || !country || !region}
-            >
-              {planId ? '주머니에 담기' : '이 지역으로 시작'}
+            {!planId && (
+              <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
+                이 지역으로 시작
+              </button>
+            )}
+            <button type="submit" className="planner-start" disabled={!canSearch || isSearching || !placeName.trim()}>
+              {isSearching ? '검색 중' : '검색'}
             </button>
+            {searchResults.length > 0 && (
+              <ul className="planner-search-results">
+                {searchResults.map((result) => (
+                  <li key={result.id}>
+                    <strong>{result.name}</strong>
+                    {result.address && <span>{result.address}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
             {error && (
               <p className="login-error" role="alert">
                 {error}
               </p>
             )}
           </form>
+          {canSearch && (
+            <WhenMapsReady>
+            <PlaceSearchRunner
+              request={searchRequest}
+              latitude={mapRegion?.latitude ?? null}
+              longitude={mapRegion?.longitude ?? null}
+              regionName={mapRegion?.name ?? plan?.region ?? null}
+              onSuccess={(results) => {
+                setSearchResults(results)
+                setIsSearching(false)
+              }}
+              onError={() => {
+                setSearchResults([])
+                setIsSearching(false)
+                setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')
+              }}
+            />
+            </WhenMapsReady>
+          )}
           <PlannerMap
             latitude={mapRegion?.latitude ?? 20}
             longitude={mapRegion?.longitude ?? 0}
             zoom={mapRegion ? 12 : 2}
           />
         </div>
+        </MapsProvider>
         <aside className="planner-pocket">
           <div className="planner-pocket-heading">
             <div>
