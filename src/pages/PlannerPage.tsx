@@ -6,6 +6,7 @@ import plannerBookmark from '../assets/planner-bookmark.svg'
 import plannerCalendar from '../assets/planner-calendar.svg'
 import plannerCalendarDays from '../assets/planner-calendar-days.svg'
 import plannerChevronDown from '../assets/planner-chevron-down.svg'
+import plannerClose from '../assets/planner-close.svg'
 import plannerChevron from '../assets/planner-chevron.svg'
 import plannerGlobe from '../assets/planner-globe.svg'
 import plannerMinus from '../assets/planner-minus.svg'
@@ -19,8 +20,9 @@ import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsPr
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
+import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Plan } from '../types/plan'
-import { placeCategories, placeCategoryLabel, type Place, type PlaceCategory } from '../types/place'
+import { placeCategoryLabel, type Place } from '../types/place'
 
 const searchDebounceMs = 400
 
@@ -40,8 +42,8 @@ function PlannerPage() {
   const [openMenu, setOpenMenu] = useState<'country' | 'region' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(Boolean(planId))
   const [placeName, setPlaceName] = useState('')
-  const [category, setCategory] = useState<PlaceCategory>('sight')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
@@ -64,10 +66,12 @@ function PlannerPage() {
 
   useEffect(() => {
     if (!planId) {
+      setIsLoadingPlaces(false)
       return
     }
 
     let ignore = false
+    setIsLoadingPlaces(true)
 
     getPlan(planId)
       .then((nextPlan) => {
@@ -86,12 +90,18 @@ function PlannerPage() {
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
-        if (!ignore && nextPlaces) {
+        if (ignore) {
+          return
+        }
+
+        setIsLoadingPlaces(false)
+        if (nextPlaces) {
           setPlaces(nextPlaces)
         }
       })
       .catch(() => {
         if (!ignore) {
+          setIsLoadingPlaces(false)
           setError('여행 계획을 불러오지 못했습니다.')
         }
       })
@@ -295,9 +305,12 @@ function PlannerPage() {
 
       const place = await addPlace(nextPlanId, {
         name: result.name,
-        category,
+        category: result.category,
         latitude: result.latitude,
         longitude: result.longitude,
+        openingHours: result.openingHours,
+        closedDays: result.closedDays,
+        breakTime: result.breakTime,
       })
 
       if (planId) {
@@ -494,20 +507,6 @@ function PlannerPage() {
                 />
               </label>
             </div>
-            {canSearch && (
-              <div className="planner-options" role="listbox" aria-label="장소 분류">
-                {placeCategories.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-selected={item === category}
-                    onClick={() => setCategory(item)}
-                  >
-                    {placeCategoryLabel[item]}
-                  </button>
-                ))}
-              </div>
-            )}
             {!planId && (
               <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
                 이 지역으로 시작
@@ -610,15 +609,29 @@ function PlannerPage() {
             </button>
           </div>
           <p>가고 싶은 곳을 주머니에 담으면, 가장 편한 순서로!</p>
-          {places.length === 0 ? (
-            <p className="planner-pocket-empty">아직 담은 장소가 없습니다.</p>
+          {isLoadingPlaces ? (
+            <div className="planner-pocket-empty">
+              <p>장소를 불러오는 중입니다.</p>
+            </div>
+          ) : places.length === 0 ? (
+            <div className="planner-pocket-empty" role="status">
+              <strong>아직 담은 장소가 없습니다.</strong>
+              <p>검색한 장소를 주머니에 담아 보세요.</p>
+            </div>
           ) : (
             <ul className="planner-places">
-              {places.map((place) => (
+              {places.map((place, index) => (
                 <li key={place.id}>
-                  <div>
+                  <div className="planner-place-thumb" aria-hidden="true">
+                    <span>{index + 1}</span>
+                  </div>
+                  <div className="planner-place-copy">
                     <strong>{place.name}</strong>
-                    <span>{placeCategoryLabel[place.category]}</span>
+                    <p>
+                      {placeCategoryLabel[place.category]}
+                      {activeRegion ? ` · ${activeRegion}` : ''}
+                    </p>
+                    <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
                   </div>
                   <button
                     type="button"
@@ -626,7 +639,7 @@ function PlannerPage() {
                     aria-label={`${place.name} 빼기`}
                     onClick={() => handleDeletePlace(place.id)}
                   >
-                    빼기
+                    <img src={plannerClose} alt="" />
                   </button>
                 </li>
               ))}

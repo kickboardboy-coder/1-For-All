@@ -709,30 +709,6 @@ body {
   color: #7a8983;
 }
 
-.planner-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.planner-options button {
-  height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: #e8f4ef;
-  color: #243d37;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.planner-options button[aria-selected='true'] {
-  background: #27846e;
-  color: #fff;
-}
-
 .planner-start {
   align-self: flex-start;
   height: 40px;
@@ -968,56 +944,117 @@ body {
 }
 
 .planner-pocket-empty {
-  margin-top: 16px;
-  color: #62766e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 168px;
+  margin: 16px 0 0;
+  padding: 24px 16px;
+  border-radius: 16px;
+  background: #f6f8f7;
+  color: #7a8983;
+  font-size: 12px;
+  text-align: center;
+}
+
+.planner-pocket-empty strong {
+  color: #243d37;
+  font-size: 13px;
+}
+
+.planner-pocket-empty p {
+  margin: 0;
 }
 
 .planner-places {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 360px;
   margin: 16px 0 0;
   padding: 0;
+  overflow: auto;
   list-style: none;
 }
 
 .planner-places li {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid #e4ebe7;
-  border-radius: 12px;
+  min-height: 84px;
+  padding: 12px;
+  border-radius: 16px;
   background: #f6f8f7;
 }
 
-.planner-places div {
+.planner-place-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  background: #e8f4ef;
+}
+
+.planner-place-thumb span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: #fff;
+  color: #27846e;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.planner-place-copy {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.planner-places strong {
+.planner-place-copy strong,
+.planner-place-copy p {
+  margin: 0;
   overflow: hidden;
-  color: #243d37;
-  font-size: 14px;
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.planner-places li span {
+.planner-place-copy strong {
+  color: #243d37;
+  font-size: 13px;
+}
+
+.planner-place-copy p {
+  color: #7a8983;
+  font-size: 10px;
+}
+
+.planner-place-copy .planner-place-hours {
   color: #27846e;
-  font-size: 12px;
-  font-weight: 700;
+  white-space: normal;
 }
 
 .planner-places button {
   flex-shrink: 0;
-  color: #7a8983;
-  font-size: 12px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 

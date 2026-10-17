@@ -19,6 +19,9 @@ type NewPlace = {
   category: PlaceCategory
   latitude: number
   longitude: number
+  openingHours: string | null
+  closedDays: string | null
+  breakTime: string | null
 }
 
 function placesCollection(planId: string) {
@@ -71,7 +74,10 @@ export async function getPlaceCount(planId: string): Promise<number> {
   return snapshot.data().count
 }
 
-export async function addPlace(planId: string, { name, category, latitude, longitude }: NewPlace): Promise<Place> {
+export async function addPlace(
+  planId: string,
+  { name, category, latitude, longitude, openingHours, closedDays, breakTime }: NewPlace,
+): Promise<Place> {
   requireUser()
 
   const place = {
@@ -80,9 +86,9 @@ export async function addPlace(planId: string, { name, category, latitude, longi
     latitude,
     longitude,
     category,
-    openingHours: null,
-    closedDays: null,
-    breakTime: null,
+    openingHours,
+    closedDays,
+    breakTime,
   }
   const docRef = await addDoc(placesCollection(planId), place)
   await touchPlan(planId)
