@@ -20,8 +20,9 @@ import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsPr
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
+import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Plan } from '../types/plan'
-import { placeCategories, placeCategoryLabel, type Place, type PlaceCategory } from '../types/place'
+import { placeCategoryLabel, type Place } from '../types/place'
 
 const searchDebounceMs = 400
 
@@ -42,7 +43,6 @@ function PlannerPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
   const [placeName, setPlaceName] = useState('')
-  const [category, setCategory] = useState<PlaceCategory>('sight')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
@@ -296,9 +296,12 @@ function PlannerPage() {
 
       const place = await addPlace(nextPlanId, {
         name: result.name,
-        category,
+        category: 'sight',
         latitude: result.latitude,
         longitude: result.longitude,
+        openingHours: result.openingHours,
+        closedDays: result.closedDays,
+        breakTime: result.breakTime,
       })
 
       if (planId) {
@@ -495,20 +498,6 @@ function PlannerPage() {
                 />
               </label>
             </div>
-            {canSearch && (
-              <div className="planner-options" role="listbox" aria-label="장소 분류">
-                {placeCategories.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-selected={item === category}
-                    onClick={() => setCategory(item)}
-                  >
-                    {placeCategoryLabel[item]}
-                  </button>
-                ))}
-              </div>
-            )}
             {!planId && (
               <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
                 이 지역으로 시작
@@ -626,6 +615,7 @@ function PlannerPage() {
                       {placeCategoryLabel[place.category]}
                       {activeRegion ? ` · ${activeRegion}` : ''}
                     </p>
+                    <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
                   </div>
                   <button
                     type="button"
