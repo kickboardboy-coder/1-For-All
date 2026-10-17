@@ -6,6 +6,7 @@ import plannerBookmark from '../assets/planner-bookmark.svg'
 import plannerCalendar from '../assets/planner-calendar.svg'
 import plannerCalendarDays from '../assets/planner-calendar-days.svg'
 import plannerChevronDown from '../assets/planner-chevron-down.svg'
+import plannerClose from '../assets/planner-close.svg'
 import plannerChevron from '../assets/planner-chevron.svg'
 import plannerGlobe from '../assets/planner-globe.svg'
 import plannerMinus from '../assets/planner-minus.svg'
@@ -614,11 +615,17 @@ function PlannerPage() {
             <p className="planner-pocket-empty">아직 담은 장소가 없습니다.</p>
           ) : (
             <ul className="planner-places">
-              {places.map((place) => (
+              {places.map((place, index) => (
                 <li key={place.id}>
-                  <div>
+                  <div className="planner-place-thumb" aria-hidden="true">
+                    <span>{index + 1}</span>
+                  </div>
+                  <div className="planner-place-copy">
                     <strong>{place.name}</strong>
-                    <span>{placeCategoryLabel[place.category]}</span>
+                    <p>
+                      {placeCategoryLabel[place.category]}
+                      {activeRegion ? ` · ${activeRegion}` : ''}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -626,7 +633,7 @@ function PlannerPage() {
                     aria-label={`${place.name} 빼기`}
                     onClick={() => handleDeletePlace(place.id)}
                   >
-                    빼기
+                    <img src={plannerClose} alt="" />
                   </button>
                 </li>
               ))}
