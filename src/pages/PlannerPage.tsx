@@ -296,7 +296,7 @@ function PlannerPage() {
 
       const place = await addPlace(nextPlanId, {
         name: result.name,
-        category: 'sight',
+        category: result.category,
         latitude: result.latitude,
         longitude: result.longitude,
         openingHours: result.openingHours,
