@@ -42,6 +42,7 @@ function PlannerPage() {
   const [openMenu, setOpenMenu] = useState<'country' | 'region' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(Boolean(planId))
   const [placeName, setPlaceName] = useState('')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
@@ -65,10 +66,12 @@ function PlannerPage() {
 
   useEffect(() => {
     if (!planId) {
+      setIsLoadingPlaces(false)
       return
     }
 
     let ignore = false
+    setIsLoadingPlaces(true)
 
     getPlan(planId)
       .then((nextPlan) => {
@@ -87,12 +90,18 @@ function PlannerPage() {
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
-        if (!ignore && nextPlaces) {
+        if (ignore) {
+          return
+        }
+
+        setIsLoadingPlaces(false)
+        if (nextPlaces) {
           setPlaces(nextPlaces)
         }
       })
       .catch(() => {
         if (!ignore) {
+          setIsLoadingPlaces(false)
           setError('여행 계획을 불러오지 못했습니다.')
         }
       })
@@ -600,8 +609,15 @@ function PlannerPage() {
             </button>
           </div>
           <p>가고 싶은 곳을 주머니에 담으면, 가장 편한 순서로!</p>
-          {places.length === 0 ? (
-            <p className="planner-pocket-empty">아직 담은 장소가 없습니다.</p>
+          {isLoadingPlaces ? (
+            <div className="planner-pocket-empty">
+              <p>장소를 불러오는 중입니다.</p>
+            </div>
+          ) : places.length === 0 ? (
+            <div className="planner-pocket-empty" role="status">
+              <strong>아직 담은 장소가 없습니다.</strong>
+              <p>검색한 장소를 주머니에 담아 보세요.</p>
+            </div>
           ) : (
             <ul className="planner-places">
               {places.map((place, index) => (
