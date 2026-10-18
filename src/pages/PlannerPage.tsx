@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan, updatePlanDestination } from '../api/plans'
+import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
@@ -25,6 +25,40 @@ import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
 
 const searchDebounceMs = 400
+const defaultDayStart = '09:00'
+const defaultDayEnd = '22:00'
+const defaultMeals: PlanMeals = {
+  includeBreakfast: true,
+  includeLunch: true,
+  includeDinner: true,
+}
+const mealChoices = [
+  { key: 'includeBreakfast', label: '아침' },
+  { key: 'includeLunch', label: '점심' },
+  { key: 'includeDinner', label: '저녁' },
+] as const satisfies ReadonlyArray<{ key: keyof PlanMeals; label: string }>
+const dayTimeOptions = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2)
+  const minute = index % 2 === 0 ? '00' : '30'
+  return `${String(hour).padStart(2, '0')}:${minute}`
+})
+
+function formatKoreanTime(value: string) {
+  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+
+  if (!match) {
+    return value
+  }
+
+  const hour = Number(match[1])
+  const period = hour < 12 ? '오전' : '오후'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${period} ${String(hour12).padStart(2, '0')}:${match[2]}`
+}
+
+function timeChoices(value: string) {
+  return dayTimeOptions.includes(value) ? dayTimeOptions : [...dayTimeOptions, value].sort()
+}
 
 const steps = [
   { number: 1, label: '나라 선택' },
@@ -39,13 +73,20 @@ function PlannerPage() {
   const [error, setError] = useState('')
   const [country, setCountry] = useState('')
   const [region, setRegion] = useState('')
-  const [openMenu, setOpenMenu] = useState<'country' | 'region' | null>(null)
+  const [openMenu, setOpenMenu] = useState<'country' | 'region' | 'dayStart' | 'dayEnd' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(Boolean(planId))
   const [placeName, setPlaceName] = useState('')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
+  const [nights, setNights] = useState<number | null>(null)
+  const [startDate, setStartDate] = useState<string | null>(null)
+  const [lodging, setLodging] = useState<PlanLodging | null>(null)
+  const [dayStart, setDayStart] = useState(defaultDayStart)
+  const [dayEnd, setDayEnd] = useState(defaultDayEnd)
+  const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
@@ -56,13 +97,26 @@ function PlannerPage() {
   const searchTimer = useRef<number | null>(null)
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
+  const dayHoursMenu = useRef<HTMLDivElement>(null)
+  const dayHoursTouched = useRef(false)
+  const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
   const activeRegion = currentStep === 1 ? region : region || plan?.region || ''
   const regions = destinations.find((item) => item.country === activeCountry)?.regions ?? []
   const mapRegion = findRegion(activeCountry, activeRegion)
   const editingDestination = Boolean(planId) && currentStep === 1
-  const nights = plan?.nights
-  const days = nights === null || nights === undefined ? null : nights + 1
+  const days = nights === null ? null : nights + 1
+  const stayPlaces = places.filter((place) => place.category === 'stay')
+  const dayHoursInvalid = Boolean(dayStart && dayEnd && dayStart >= dayEnd)
+  const missingRequirements = [
+    !planId ? '저장된 계획' : null,
+    nights === null ? '여행 기간' : null,
+    !startDate ? '출발일' : null,
+    !lodging ? '숙소' : null,
+    !(dayStart && dayEnd && dayStart < dayEnd) ? '활동 시간' : null,
+    places.length === 0 ? '담은 장소' : null,
+  ].filter((item): item is string => Boolean(item))
+  const canOptimize = missingRequirements.length === 0
 
   useEffect(() => {
     if (!planId) {
@@ -87,6 +141,68 @@ function PlannerPage() {
         setPlan(nextPlan)
         setCountry(nextPlan.country ?? '')
         setRegion(nextPlan.region)
+        setNights(nextPlan.nights)
+        setStartDate(nextPlan.startDate)
+        setLodging(
+          nextPlan.lodgingPlaceId && nextPlan.lodgingName && nextPlan.lodgingLatitude !== null && nextPlan.lodgingLongitude !== null
+            ? {
+                lodgingPlaceId: nextPlan.lodgingPlaceId,
+                lodgingName: nextPlan.lodgingName,
+                lodgingLatitude: nextPlan.lodgingLatitude,
+                lodgingLongitude: nextPlan.lodgingLongitude,
+              }
+            : null,
+        )
+        if (!mealsTouched.current) {
+          const nextMeals = {
+            includeBreakfast: nextPlan.includeBreakfast ?? defaultMeals.includeBreakfast,
+            includeLunch: nextPlan.includeLunch ?? defaultMeals.includeLunch,
+            includeDinner: nextPlan.includeDinner ?? defaultMeals.includeDinner,
+          }
+          setMeals(nextMeals)
+
+          if (nextPlan.includeBreakfast === null && nextPlan.includeLunch === null && nextPlan.includeDinner === null) {
+            void updatePlanMeals(nextPlan.id, nextMeals)
+              .then((updatedAt) => {
+                if (!ignore && !mealsTouched.current) {
+                  setPlan((current) => (current ? { ...current, ...nextMeals, updatedAt } : current))
+                }
+              })
+              .catch(() => {
+                if (!ignore && !mealsTouched.current) {
+                  setError('식사 옵션을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+                }
+              })
+          }
+        }
+
+        if (!dayHoursTouched.current) {
+          const nextStart = nextPlan.dayStart ?? defaultDayStart
+          const nextEnd = nextPlan.dayEnd ?? defaultDayEnd
+          setDayStart(nextStart)
+          setDayEnd(nextEnd)
+
+          if (!nextPlan.dayStart && !nextPlan.dayEnd && nextStart < nextEnd) {
+            setIsSavingSchedule(true)
+            void updatePlanDayHours(nextPlan.id, nextStart, nextEnd)
+              .then((updatedAt) => {
+                if (!ignore && !dayHoursTouched.current) {
+                  setPlan((current) => (current ? { ...current, dayStart: nextStart, dayEnd: nextEnd, updatedAt } : current))
+                }
+              })
+              .catch(() => {
+                if (!ignore && !dayHoursTouched.current) {
+                  setError('활동 시간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+                }
+              })
+              .finally(() => {
+                if (!ignore) {
+                  setIsSavingSchedule(false)
+                }
+              })
+          }
+        }
+
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
@@ -121,9 +237,11 @@ function PlannerPage() {
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (!destinationMenu.current?.contains(event.target as Node)) {
-        setOpenMenu(null)
+      const target = event.target as Node
+      if (destinationMenu.current?.contains(target) || dayHoursMenu.current?.contains(target)) {
+        return
       }
+      setOpenMenu(null)
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -139,6 +257,14 @@ function PlannerPage() {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
+  }, [openMenu])
+
+  useEffect(() => {
+    if (openMenu !== 'dayStart' && openMenu !== 'dayEnd') {
+      return
+    }
+
+    dayHoursMenu.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [openMenu])
 
   const canSearch = Boolean(planId || region)
@@ -274,7 +400,16 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
+      const nextPlan = await savePlan({
+        country,
+        region,
+        nights,
+        startDate,
+        lodging,
+        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
+        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+        meals,
+      })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -299,7 +434,16 @@ function PlannerPage() {
           return
         }
 
-        const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
+        const nextPlan = await savePlan({
+        country,
+        region,
+        nights,
+        startDate,
+        lodging,
+        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
+        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+        meals,
+      })
         nextPlanId = nextPlan.id
       }
 
@@ -345,7 +489,25 @@ function PlannerPage() {
 
     try {
       await deletePlace(planId, placeId)
-      setPlaces((current) => current.filter((place) => place.id !== placeId))
+      const nextPlaces = places.filter((place) => place.id !== placeId)
+      setPlaces(nextPlaces)
+
+      if (lodging?.lodgingPlaceId === placeId) {
+        const updatedAt = await updatePlanLodging(planId, null)
+        setLodging(null)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                lodgingPlaceId: null,
+                lodgingName: null,
+                lodgingLatitude: null,
+                lodgingLongitude: null,
+                updatedAt,
+              }
+            : current,
+        )
+      }
     } catch {
       setError('장소를 빼지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
@@ -364,10 +526,33 @@ function PlannerPage() {
     try {
       await clearPlaces(planId)
       setPlaces([])
+
+      if (lodging) {
+        const updatedAt = await updatePlanLodging(planId, null)
+        setLodging(null)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                lodgingPlaceId: null,
+                lodgingName: null,
+                lodgingLatitude: null,
+                lodgingLongitude: null,
+                updatedAt,
+              }
+            : current,
+        )
+      }
     } catch {
       setError('장소를 비우지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsUpdatingPlaces(false)
+    }
+  }
+
+  function handleOptimize() {
+    if (!canOptimize || !planId) {
+      return
     }
   }
 
@@ -386,6 +571,173 @@ function PlannerPage() {
       setError('장소를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
       setIsSavingPlaces(false)
     }
+  }
+
+  async function persistSchedule(nextNights: number | null, nextStartDate: string | null) {
+    setNights(nextNights)
+    setStartDate(nextStartDate)
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanSchedule(planId, nextNights, nextStartDate)
+      setPlan((current) => (current ? { ...current, nights: nextNights, startDate: nextStartDate, updatedAt } : current))
+    } catch {
+      setError('여행 기간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeNights(delta: number) {
+    if (nights === null) {
+      if (delta < 0) {
+        return
+      }
+
+      void persistSchedule(0, startDate)
+      return
+    }
+
+    const nextNights = nights + delta
+
+    if (nextNights > 60) {
+      return
+    }
+
+    void persistSchedule(nextNights < 0 ? null : nextNights, startDate)
+  }
+
+  function changeStartDate(value: string) {
+    const nextStartDate = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+    void persistSchedule(nights, nextStartDate)
+  }
+
+  async function persistLodging(nextLodging: PlanLodging | null) {
+    setLodging(nextLodging)
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanLodging(planId, nextLodging)
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              lodgingPlaceId: nextLodging?.lodgingPlaceId ?? null,
+              lodgingName: nextLodging?.lodgingName ?? null,
+              lodgingLatitude: nextLodging?.lodgingLatitude ?? null,
+              lodgingLongitude: nextLodging?.lodgingLongitude ?? null,
+              updatedAt,
+            }
+          : current,
+      )
+    } catch {
+      setError('숙소 위치를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeLodging(placeId: string) {
+    if (!placeId) {
+      void persistLodging(null)
+      return
+    }
+
+    const place = stayPlaces.find((item) => item.id === placeId)
+
+    if (!place) {
+      return
+    }
+
+    void persistLodging({
+      lodgingPlaceId: place.id,
+      lodgingName: place.name,
+      lodgingLatitude: place.latitude,
+      lodgingLongitude: place.longitude,
+    })
+  }
+
+  async function persistDayHours(nextStart: string | null, nextEnd: string | null) {
+    const complete = Boolean(nextStart && nextEnd && nextStart < nextEnd)
+    const cleared = !nextStart && !nextEnd
+
+    if (!complete && !cleared) {
+      return
+    }
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanDayHours(planId, complete ? nextStart : null, complete ? nextEnd : null)
+      setPlan((current) =>
+        current
+          ? { ...current, dayStart: complete ? nextStart : null, dayEnd: complete ? nextEnd : null, updatedAt }
+          : current,
+      )
+    } catch {
+      setError('활동 시간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeDayHours(nextStart: string, nextEnd: string) {
+    dayHoursTouched.current = true
+    setDayStart(nextStart)
+    setDayEnd(nextEnd)
+    void persistDayHours(nextStart, nextEnd)
+  }
+
+  async function persistMeals(nextMeals: PlanMeals) {
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanMeals(planId, nextMeals)
+      setPlan((current) => (current ? { ...current, ...nextMeals, updatedAt } : current))
+    } catch {
+      setError('식사 옵션을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeMeal(key: keyof PlanMeals) {
+    const nextMeals = { ...meals, [key]: !meals[key] }
+    mealsTouched.current = true
+    setMeals(nextMeals)
+    void persistMeals(nextMeals)
+  }
+
+  function formatStartDate(value: string) {
+    const [year, month, day] = value.split('-').map(Number)
+
+    if (!year || !month || !day) {
+      return value
+    }
+
+    return `${year}년 ${month}월 ${day}일`
   }
 
   return (
@@ -506,41 +858,14 @@ function PlannerPage() {
                   onChange={(event) => setPlaceName(event.target.value)}
                 />
               </label>
+              <button type="submit" className="planner-search-submit" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
+                {isSearching ? '검색 중' : '검색'}
+              </button>
             </div>
             {!planId && (
               <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
                 이 지역으로 시작
               </button>
-            )}
-            <button type="submit" className="planner-start" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
-              {isSearching ? '검색 중' : '검색'}
-            </button>
-            {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-              <p className="planner-search-empty" role="status">
-                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-              </p>
-            )}
-            {searchResults.length > 0 && (
-              <ul className="planner-search-results">
-                {searchResults.map((result, index) => (
-                  <li key={result.id}>
-                    <button
-                      type="button"
-                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
-                      onClick={() => {
-                        setSelectedPlaceId(result.id)
-                        setMapFocus('place')
-                      }}
-                    >
-                      <span>{index + 1}</span>
-                      <span>
-                        <strong>{result.name}</strong>
-                        {result.address && <small>{result.address}</small>}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
             {error && (
               <p className="login-error" role="alert">
@@ -595,6 +920,33 @@ function PlannerPage() {
             isAddingPlace={isUpdatingPlaces}
             onAddPlace={handleAddToPocket}
           />
+          {!isSearching && !error && emptySearchQuery === placeName.trim() && (
+            <p className="planner-search-empty" role="status">
+              검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
+            </p>
+          )}
+          {searchResults.length > 0 && (
+            <ul className="planner-search-results">
+              {searchResults.map((result, index) => (
+                <li key={result.id}>
+                  <button
+                    type="button"
+                    className={result.id === selectedPlaceId ? 'is-selected' : undefined}
+                    onClick={() => {
+                      setSelectedPlaceId(result.id)
+                      setMapFocus('place')
+                    }}
+                  >
+                    <span>{index + 1}</span>
+                    <span>
+                      <strong>{result.name}</strong>
+                      {result.address && <small>{result.address}</small>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         </MapsProvider>
         <aside className="planner-pocket">
@@ -652,44 +1004,150 @@ function PlannerPage() {
             </div>
             <div className="planner-counters">
               <div>
-                <button type="button" disabled>
+                <button type="button" aria-label="기간 줄이기" disabled={nights === null || isSavingSchedule} onClick={() => changeNights(-1)}>
                   <img src={plannerMinus} alt="" />
                 </button>
                 <p>
-                  <strong>{nights ?? '–'}</strong>
-                  <span>박</span>
+                  {nights === null || days === null ? (
+                    <strong>–</strong>
+                  ) : (
+                    <>
+                      <strong>{nights}</strong>
+                      <span>박</span>
+                      <strong>{days}</strong>
+                      <span>일</span>
+                    </>
+                  )}
                 </p>
-                <button type="button" disabled>
-                  <img src={plannerPlus} alt="" />
-                </button>
-              </div>
-              <div>
-                <button type="button" disabled>
-                  <img src={plannerMinus} alt="" />
-                </button>
-                <p>
-                  <strong>{days ?? '–'}</strong>
-                  <span>일</span>
-                </p>
-                <button type="button" disabled>
+                <button type="button" aria-label="기간 늘리기" disabled={nights === 60 || isSavingSchedule} onClick={() => changeNights(1)}>
                   <img src={plannerPlus} alt="" />
                 </button>
               </div>
             </div>
-            <div className="planner-date">
+            <label className="planner-date">
               <span>출발일</span>
-              <strong>{plan?.startDate ?? '날짜 미정'}</strong>
+              <strong>{startDate ? formatStartDate(startDate) : '날짜 미정'}</strong>
               <img src={plannerCalendar} alt="" />
+              <input
+                type="date"
+                aria-label="출발일"
+                value={startDate ?? ''}
+                disabled={isSavingSchedule}
+                onChange={(event) => changeStartDate(event.target.value)}
+              />
+            </label>
+            <label className="planner-lodging">
+              <img src={plannerPin} alt="" />
+              <select
+                aria-label="숙소 위치"
+                value={lodging?.lodgingPlaceId ?? ''}
+                disabled={isSavingSchedule || stayPlaces.length === 0}
+                onChange={(event) => changeLodging(event.target.value)}
+              >
+                <option value="">{stayPlaces.length === 0 ? '숙소를 먼저 담아 주세요' : '숙소를 선택해 주세요'}</option>
+                {lodging && !stayPlaces.some((place) => place.id === lodging.lodgingPlaceId) && (
+                  <option value={lodging.lodgingPlaceId}>{lodging.lodgingName}</option>
+                )}
+                {stayPlaces.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+              <img src={plannerChevronDown} alt="" />
+            </label>
+            <div className="planner-day-hours" ref={dayHoursMenu}>
+              <span>활동 시간</span>
+              <div className={openMenu === 'dayStart' ? 'planner-time is-open' : 'planner-time'}>
+                <button
+                  type="button"
+                  aria-label="활동 시작"
+                  aria-haspopup="listbox"
+                  aria-expanded={openMenu === 'dayStart'}
+                  disabled={isSavingSchedule}
+                  onClick={() => setOpenMenu((current) => (current === 'dayStart' ? null : 'dayStart'))}
+                >
+                  {formatKoreanTime(dayStart)}
+                </button>
+                {openMenu === 'dayStart' && (
+                  <ul className="planner-time-menu" role="listbox" aria-label="활동 시작">
+                    {timeChoices(dayStart).map((time) => (
+                      <li key={time}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={time === dayStart}
+                          onClick={() => {
+                            changeDayHours(time, dayEnd)
+                            setOpenMenu(null)
+                          }}
+                        >
+                          {formatKoreanTime(time)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <span>~</span>
+              <div className={openMenu === 'dayEnd' ? 'planner-time is-open' : 'planner-time'}>
+                <button
+                  type="button"
+                  aria-label="활동 종료"
+                  aria-haspopup="listbox"
+                  aria-expanded={openMenu === 'dayEnd'}
+                  disabled={isSavingSchedule}
+                  onClick={() => setOpenMenu((current) => (current === 'dayEnd' ? null : 'dayEnd'))}
+                >
+                  {formatKoreanTime(dayEnd)}
+                </button>
+                {openMenu === 'dayEnd' && (
+                  <ul className="planner-time-menu" role="listbox" aria-label="활동 종료">
+                    {timeChoices(dayEnd).map((time) => (
+                      <li key={time}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={time === dayEnd}
+                          onClick={() => {
+                            changeDayHours(dayStart, time)
+                            setOpenMenu(null)
+                          }}
+                        >
+                          {formatKoreanTime(time)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            {dayHoursInvalid && <p className="planner-day-hours-note">종료 시각은 시작 시각보다 늦어야 해요.</p>}
+            <div className="planner-meals">
+              <span>식사</span>
+              {mealChoices.map((choice) => (
+                <button
+                  key={choice.key}
+                  type="button"
+                  aria-pressed={meals[choice.key]}
+                  disabled={isSavingSchedule}
+                  onClick={() => changeMeal(choice.key)}
+                >
+                  {choice.label}
+                </button>
+              ))}
             </div>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
-          <button type="button" className="planner-optimize" disabled>
+          <button type="button" className="planner-optimize" disabled={!canOptimize} onClick={handleOptimize}>
             <img src={plannerSparkles} alt="" />
             최적의 여행 계획 만들기
             <img src={plannerArrow} alt="" />
           </button>
           <p className="planner-optimize-note">
-            인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.
+            {canOptimize
+              ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
+              : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
           </p>
           <button
             type="button"

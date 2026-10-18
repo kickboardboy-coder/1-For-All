@@ -709,6 +709,25 @@ body {
   color: #7a8983;
 }
 
+.planner-search-submit {
+  flex: 0 0 auto;
+  height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #27846e;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-search-submit:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .planner-start {
   align-self: flex-start;
   height: 40px;
@@ -729,7 +748,7 @@ body {
 }
 
 .planner-search-empty {
-  margin: 0;
+  margin: 12px 0 0;
   color: #62766e;
   font-size: 13px;
 }
@@ -738,7 +757,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -1112,6 +1131,10 @@ body {
   font-size: 20px;
 }
 
+.planner-counters p strong + span + strong {
+  margin-left: 6px;
+}
+
 .planner-counters span,
 .planner-duration > p {
   color: #7a8983;
@@ -1123,11 +1146,172 @@ body {
   font-size: 10px;
 }
 
+.planner-counters button {
+  cursor: pointer;
+}
+
 .planner-date {
+  position: relative;
   height: 40px;
   background: #fff;
   color: #7a8983;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.planner-date input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.planner-lodging {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.planner-lodging select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #243d37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+.planner-lodging select:disabled {
+  color: #7a8983;
+  cursor: default;
+}
+
+.planner-day-hours {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+  color: #7a8983;
+  font-size: 12px;
+}
+
+.planner-time {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.planner-time > button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #243d37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-time > button:disabled {
+  cursor: default;
+}
+
+.planner-time-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 132px;
+  max-height: 240px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(36, 61, 55, 0.12);
+}
+
+.planner-time-menu button {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #243d37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-time-menu button:hover,
+.planner-time-menu button[aria-selected='true'] {
+  background: #e8f4ef;
+  color: #27846e;
+  font-weight: 700;
+}
+
+.planner-meals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+  color: #7a8983;
+  font-size: 12px;
+}
+
+.planner-meals button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #e4ebe7;
+  border-radius: 999px;
+  background: #fff;
+  color: #7a8983;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.planner-meals button[aria-pressed='true'] {
+  border-color: #27846e;
+  background: #e8f4ef;
+  color: #27846e;
+  font-weight: 700;
+}
+
+.planner-meals button:disabled {
+  cursor: default;
+}
+
+.planner-day-hours-note {
+  margin: 0;
+  color: #c4514a;
+  font-size: 11px;
 }
 
 .planner-date strong {
@@ -1185,8 +1369,18 @@ body {
   opacity: 1;
 }
 
+.planner-optimize:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.planner-optimize:not(:disabled) {
+  cursor: pointer;
+}
+
 .planner-pocket-heading button:disabled,
-.planner-places button:disabled {
+.planner-places button:disabled,
+.planner-counters button:disabled {
   cursor: default;
   opacity: 0.45;
 }

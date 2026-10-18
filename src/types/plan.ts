@@ -14,6 +14,15 @@ export type Plan = {
   region: string
   nights: number | null
   startDate: string | null
+  lodgingPlaceId: string | null
+  lodgingName: string | null
+  lodgingLatitude: number | null
+  lodgingLongitude: number | null
+  dayStart: string | null
+  dayEnd: string | null
+  includeBreakfast: boolean | null
+  includeLunch: boolean | null
+  includeDinner: boolean | null
   status: PlanStatus
   updatedAt: string
 }

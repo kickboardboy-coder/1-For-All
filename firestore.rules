@@ -12,6 +12,15 @@ rules_version = '2';
 //   - region: string (required, 1-80) - travel region
 //   - nights: int or null (required, 0-60 when set) - number of nights
 //   - startDate: string YYYY-MM-DD or null (required) - departure date
+//   - lodgingPlaceId: string or null - pocket place chosen as lodging
+//   - lodgingName: string or null - lodging name
+//   - lodgingLatitude: number or null - lodging latitude
+//   - lodgingLongitude: number or null - lodging longitude
+//   - dayStart: string HH:mm or null - daily activity start
+//   - dayEnd: string HH:mm or null - daily activity end
+//   - includeBreakfast: bool - schedule a breakfast stop
+//   - includeLunch: bool - schedule a lunch stop
+//   - includeDinner: bool - schedule a dinner stop
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
 //
@@ -40,7 +49,24 @@ service cloud.firestore {
     }
 
     function isValidPlan(data) {
-      return hasOnlyAllowedFields(['userId', 'country', 'region', 'nights', 'startDate', 'status', 'updatedAt'])
+      return hasOnlyAllowedFields([
+        'userId',
+        'country',
+        'region',
+        'nights',
+        'startDate',
+        'lodgingPlaceId',
+        'lodgingName',
+        'lodgingLatitude',
+        'lodgingLongitude',
+        'dayStart',
+        'dayEnd',
+        'includeBreakfast',
+        'includeLunch',
+        'includeDinner',
+        'status',
+        'updatedAt',
+      ])
         && data.userId is string
         && data.userId == request.auth.uid
         && (!('country' in data) || (data.country is string && data.country.size() > 0 && data.country.size() <= 40))
@@ -49,9 +75,52 @@ service cloud.firestore {
         && data.region.size() <= 80
         && (data.nights == null || (data.nights is int && data.nights >= 0 && data.nights <= 60))
         && (data.startDate == null || (data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))
+        && isValidLodging(data)
+        && isValidDayHours(data)
+        && isValidMeals(data)
         && data.status in ['pending', 'optimized']
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
+    }
+
+    function isValidLodging(data) {
+      return (!('lodgingPlaceId' in data) && !('lodgingName' in data) && !('lodgingLatitude' in data) && !('lodgingLongitude' in data))
+        || (data.lodgingPlaceId == null && data.lodgingName == null && data.lodgingLatitude == null && data.lodgingLongitude == null)
+        || (
+          data.lodgingPlaceId is string
+          && data.lodgingPlaceId.size() > 0
+          && data.lodgingPlaceId.size() <= 128
+          && data.lodgingName is string
+          && data.lodgingName.size() > 0
+          && data.lodgingName.size() <= 300
+          && data.lodgingLatitude is number
+          && data.lodgingLatitude >= -90
+          && data.lodgingLatitude <= 90
+          && data.lodgingLongitude is number
+          && data.lodgingLongitude >= -180
+          && data.lodgingLongitude <= 180
+        );
+    }
+
+    function isValidDayHours(data) {
+      return (!('dayStart' in data) && !('dayEnd' in data))
+        || (data.dayStart == null && data.dayEnd == null)
+        || (
+          data.dayStart is string
+          && data.dayEnd is string
+          && data.dayStart.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+          && data.dayEnd.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+          && data.dayStart < data.dayEnd
+        );
+    }
+
+    function isValidMeals(data) {
+      return (!('includeBreakfast' in data) && !('includeLunch' in data) && !('includeDinner' in data))
+        || (
+          data.includeBreakfast is bool
+          && data.includeLunch is bool
+          && data.includeDinner is bool
+        );
     }
 
     function isPlanOwner(planId) {
