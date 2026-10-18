@@ -18,6 +18,9 @@ rules_version = '2';
 //   - lodgingLongitude: number or null - lodging longitude
 //   - dayStart: string HH:mm or null - daily activity start
 //   - dayEnd: string HH:mm or null - daily activity end
+//   - includeBreakfast: bool - schedule a breakfast stop
+//   - includeLunch: bool - schedule a lunch stop
+//   - includeDinner: bool - schedule a dinner stop
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
 //
@@ -58,6 +61,9 @@ service cloud.firestore {
         'lodgingLongitude',
         'dayStart',
         'dayEnd',
+        'includeBreakfast',
+        'includeLunch',
+        'includeDinner',
         'status',
         'updatedAt',
       ])
@@ -71,6 +77,7 @@ service cloud.firestore {
         && (data.startDate == null || (data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))
         && isValidLodging(data)
         && isValidDayHours(data)
+        && isValidMeals(data)
         && data.status in ['pending', 'optimized']
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
@@ -104,6 +111,15 @@ service cloud.firestore {
           && data.dayStart.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
           && data.dayEnd.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
           && data.dayStart < data.dayEnd
+        );
+    }
+
+    function isValidMeals(data) {
+      return (!('includeBreakfast' in data) && !('includeLunch' in data) && !('includeDinner' in data))
+        || (
+          data.includeBreakfast is bool
+          && data.includeLunch is bool
+          && data.includeDinner is bool
         );
     }
 

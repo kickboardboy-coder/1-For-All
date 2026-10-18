@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanSchedule, type PlanLodging } from '../api/plans'
+import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
@@ -27,6 +27,16 @@ import { placeCategoryLabel, type Place } from '../types/place'
 const searchDebounceMs = 400
 const defaultDayStart = '09:00'
 const defaultDayEnd = '22:00'
+const defaultMeals: PlanMeals = {
+  includeBreakfast: true,
+  includeLunch: true,
+  includeDinner: true,
+}
+const mealChoices = [
+  { key: 'includeBreakfast', label: '아침' },
+  { key: 'includeLunch', label: '점심' },
+  { key: 'includeDinner', label: '저녁' },
+] as const satisfies ReadonlyArray<{ key: keyof PlanMeals; label: string }>
 const dayTimeOptions = Array.from({ length: 48 }, (_, index) => {
   const hour = Math.floor(index / 2)
   const minute = index % 2 === 0 ? '00' : '30'
@@ -75,6 +85,7 @@ function PlannerPage() {
   const [lodging, setLodging] = useState<PlanLodging | null>(null)
   const [dayStart, setDayStart] = useState(defaultDayStart)
   const [dayEnd, setDayEnd] = useState(defaultDayEnd)
+  const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
@@ -88,6 +99,7 @@ function PlannerPage() {
   const destinationMenu = useRef<HTMLDivElement>(null)
   const dayHoursMenu = useRef<HTMLDivElement>(null)
   const dayHoursTouched = useRef(false)
+  const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
   const activeRegion = currentStep === 1 ? region : region || plan?.region || ''
   const regions = destinations.find((item) => item.country === activeCountry)?.regions ?? []
@@ -132,6 +144,29 @@ function PlannerPage() {
               }
             : null,
         )
+        if (!mealsTouched.current) {
+          const nextMeals = {
+            includeBreakfast: nextPlan.includeBreakfast ?? defaultMeals.includeBreakfast,
+            includeLunch: nextPlan.includeLunch ?? defaultMeals.includeLunch,
+            includeDinner: nextPlan.includeDinner ?? defaultMeals.includeDinner,
+          }
+          setMeals(nextMeals)
+
+          if (nextPlan.includeBreakfast === null && nextPlan.includeLunch === null && nextPlan.includeDinner === null) {
+            void updatePlanMeals(nextPlan.id, nextMeals)
+              .then((updatedAt) => {
+                if (!ignore && !mealsTouched.current) {
+                  setPlan((current) => (current ? { ...current, ...nextMeals, updatedAt } : current))
+                }
+              })
+              .catch(() => {
+                if (!ignore && !mealsTouched.current) {
+                  setError('식사 옵션을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+                }
+              })
+          }
+        }
+
         if (!dayHoursTouched.current) {
           const nextStart = nextPlan.dayStart ?? defaultDayStart
           const nextEnd = nextPlan.dayEnd ?? defaultDayEnd
@@ -364,6 +399,7 @@ function PlannerPage() {
         lodging,
         dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
         dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+        meals,
       })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
@@ -397,6 +433,7 @@ function PlannerPage() {
         lodging,
         dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
         dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+        meals,
       })
         nextPlanId = nextPlan.id
       }
@@ -651,6 +688,31 @@ function PlannerPage() {
     setDayStart(nextStart)
     setDayEnd(nextEnd)
     void persistDayHours(nextStart, nextEnd)
+  }
+
+  async function persistMeals(nextMeals: PlanMeals) {
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanMeals(planId, nextMeals)
+      setPlan((current) => (current ? { ...current, ...nextMeals, updatedAt } : current))
+    } catch {
+      setError('식사 옵션을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeMeal(key: keyof PlanMeals) {
+    const nextMeals = { ...meals, [key]: !meals[key] }
+    mealsTouched.current = true
+    setMeals(nextMeals)
+    void persistMeals(nextMeals)
   }
 
   function formatStartDate(value: string) {
@@ -1046,6 +1108,20 @@ function PlannerPage() {
               </div>
             </div>
             {dayHoursInvalid && <p className="planner-day-hours-note">종료 시각은 시작 시각보다 늦어야 해요.</p>}
+            <div className="planner-meals">
+              <span>식사</span>
+              {mealChoices.map((choice) => (
+                <button
+                  key={choice.key}
+                  type="button"
+                  aria-pressed={meals[choice.key]}
+                  disabled={isSavingSchedule}
+                  onClick={() => changeMeal(choice.key)}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
           <button type="button" className="planner-optimize" disabled>

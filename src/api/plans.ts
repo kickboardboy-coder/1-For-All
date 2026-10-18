@@ -20,6 +20,12 @@ export type PlanLodging = {
   lodgingLongitude: number
 }
 
+export type PlanMeals = {
+  includeBreakfast: boolean
+  includeLunch: boolean
+  includeDinner: boolean
+}
+
 type NewPlan = {
   country: string
   region: string
@@ -28,9 +34,10 @@ type NewPlan = {
   lodging: PlanLodging | null
   dayStart: string | null
   dayEnd: string | null
+  meals: PlanMeals
 }
 
-export async function savePlan({ country, region, nights, startDate, lodging, dayStart, dayEnd }: NewPlan): Promise<Plan> {
+export async function savePlan({ country, region, nights, startDate, lodging, dayStart, dayEnd, meals }: NewPlan): Promise<Plan> {
   const user = auth.currentUser
 
   if (!user) {
@@ -49,6 +56,9 @@ export async function savePlan({ country, region, nights, startDate, lodging, da
     lodgingLongitude: lodging?.lodgingLongitude ?? null,
     dayStart,
     dayEnd,
+    includeBreakfast: meals.includeBreakfast,
+    includeLunch: meals.includeLunch,
+    includeDinner: meals.includeDinner,
     status: 'pending' as const,
     updatedAt: new Date().toISOString(),
   }
@@ -111,6 +121,18 @@ export async function updatePlanDayHours(planId: string, dayStart: string | null
   return updatedAt
 }
 
+export async function updatePlanMeals(planId: string, meals: PlanMeals) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const updatedAt = new Date().toISOString()
+  await updateDoc(doc(db, 'plans', planId), { ...meals, updatedAt })
+  return updatedAt
+}
+
 export async function touchPlan(planId: string) {
   const user = auth.currentUser
 
@@ -148,6 +170,9 @@ function toPlan(id: string, data: DocumentData): Plan | null {
     lodgingLongitude: typeof data.lodgingLongitude === 'number' ? data.lodgingLongitude : null,
     dayStart: typeof data.dayStart === 'string' ? data.dayStart : null,
     dayEnd: typeof data.dayEnd === 'string' ? data.dayEnd : null,
+    includeBreakfast: typeof data.includeBreakfast === 'boolean' ? data.includeBreakfast : null,
+    includeLunch: typeof data.includeLunch === 'boolean' ? data.includeLunch : null,
+    includeDinner: typeof data.includeDinner === 'boolean' ? data.includeDinner : null,
     status: data.status,
     updatedAt: data.updatedAt,
   }
