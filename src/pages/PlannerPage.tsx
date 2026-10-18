@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan, updatePlanDestination } from '../api/plans'
+import { getPlan, savePlan, touchPlan, updatePlanDestination, updatePlanSchedule } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
@@ -46,6 +46,9 @@ function PlannerPage() {
   const [placeName, setPlaceName] = useState('')
   const [isUpdatingPlaces, setIsUpdatingPlaces] = useState(false)
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
+  const [nights, setNights] = useState<number | null>(null)
+  const [startDate, setStartDate] = useState<string | null>(null)
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
@@ -61,8 +64,7 @@ function PlannerPage() {
   const regions = destinations.find((item) => item.country === activeCountry)?.regions ?? []
   const mapRegion = findRegion(activeCountry, activeRegion)
   const editingDestination = Boolean(planId) && currentStep === 1
-  const nights = plan?.nights
-  const days = nights === null || nights === undefined ? null : nights + 1
+  const days = nights === null ? null : nights + 1
 
   useEffect(() => {
     if (!planId) {
@@ -87,6 +89,8 @@ function PlannerPage() {
         setPlan(nextPlan)
         setCountry(nextPlan.country ?? '')
         setRegion(nextPlan.region)
+        setNights(nextPlan.nights)
+        setStartDate(nextPlan.startDate)
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
@@ -274,7 +278,7 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
+      const nextPlan = await savePlan({ country, region, nights, startDate })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -299,7 +303,7 @@ function PlannerPage() {
           return
         }
 
-        const nextPlan = await savePlan({ country, region, nights: null, startDate: null })
+        const nextPlan = await savePlan({ country, region, nights, startDate })
         nextPlanId = nextPlan.id
       }
 
@@ -386,6 +390,61 @@ function PlannerPage() {
       setError('장소를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
       setIsSavingPlaces(false)
     }
+  }
+
+  async function persistSchedule(nextNights: number | null, nextStartDate: string | null) {
+    setNights(nextNights)
+    setStartDate(nextStartDate)
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanSchedule(planId, nextNights, nextStartDate)
+      setPlan((current) => (current ? { ...current, nights: nextNights, startDate: nextStartDate, updatedAt } : current))
+    } catch {
+      setError('여행 기간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeNights(delta: number) {
+    if (nights === null) {
+      if (delta < 0) {
+        return
+      }
+
+      void persistSchedule(0, startDate)
+      return
+    }
+
+    const nextNights = nights + delta
+
+    if (nextNights > 60) {
+      return
+    }
+
+    void persistSchedule(nextNights < 0 ? null : nextNights, startDate)
+  }
+
+  function changeStartDate(value: string) {
+    const nextStartDate = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+    void persistSchedule(nights, nextStartDate)
+  }
+
+  function formatStartDate(value: string) {
+    const [year, month, day] = value.split('-').map(Number)
+
+    if (!year || !month || !day) {
+      return value
+    }
+
+    return `${year}년 ${month}월 ${day}일`
   }
 
   return (
@@ -652,35 +711,38 @@ function PlannerPage() {
             </div>
             <div className="planner-counters">
               <div>
-                <button type="button" disabled>
+                <button type="button" aria-label="기간 줄이기" disabled={nights === null || isSavingSchedule} onClick={() => changeNights(-1)}>
                   <img src={plannerMinus} alt="" />
                 </button>
                 <p>
-                  <strong>{nights ?? '–'}</strong>
-                  <span>박</span>
+                  {nights === null || days === null ? (
+                    <strong>–</strong>
+                  ) : (
+                    <>
+                      <strong>{nights}</strong>
+                      <span>박</span>
+                      <strong>{days}</strong>
+                      <span>일</span>
+                    </>
+                  )}
                 </p>
-                <button type="button" disabled>
-                  <img src={plannerPlus} alt="" />
-                </button>
-              </div>
-              <div>
-                <button type="button" disabled>
-                  <img src={plannerMinus} alt="" />
-                </button>
-                <p>
-                  <strong>{days ?? '–'}</strong>
-                  <span>일</span>
-                </p>
-                <button type="button" disabled>
+                <button type="button" aria-label="기간 늘리기" disabled={nights === 60 || isSavingSchedule} onClick={() => changeNights(1)}>
                   <img src={plannerPlus} alt="" />
                 </button>
               </div>
             </div>
-            <div className="planner-date">
+            <label className="planner-date">
               <span>출발일</span>
-              <strong>{plan?.startDate ?? '날짜 미정'}</strong>
+              <strong>{startDate ? formatStartDate(startDate) : '날짜 미정'}</strong>
               <img src={plannerCalendar} alt="" />
-            </div>
+              <input
+                type="date"
+                aria-label="출발일"
+                value={startDate ?? ''}
+                disabled={isSavingSchedule}
+                onChange={(event) => changeStartDate(event.target.value)}
+              />
+            </label>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
           <button type="button" className="planner-optimize" disabled>

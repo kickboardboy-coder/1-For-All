@@ -1112,6 +1112,10 @@ body {
   font-size: 20px;
 }
 
+.planner-counters p strong + span + strong {
+  margin-left: 6px;
+}
+
 .planner-counters span,
 .planner-duration > p {
   color: #7a8983;
@@ -1123,11 +1127,24 @@ body {
   font-size: 10px;
 }
 
+.planner-counters button {
+  cursor: pointer;
+}
+
 .planner-date {
+  position: relative;
   height: 40px;
   background: #fff;
   color: #7a8983;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.planner-date input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .planner-date strong {
@@ -1186,7 +1203,8 @@ body {
 }
 
 .planner-pocket-heading button:disabled,
-.planner-places button:disabled {
+.planner-places button:disabled,
+.planner-counters button:disabled {
   cursor: default;
   opacity: 0.45;
 }
