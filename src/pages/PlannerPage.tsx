@@ -663,41 +663,14 @@ function PlannerPage() {
                   onChange={(event) => setPlaceName(event.target.value)}
                 />
               </label>
+              <button type="submit" className="planner-search-submit" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
+                {isSearching ? '검색 중' : '검색'}
+              </button>
             </div>
             {!planId && (
               <button type="button" className="planner-start" disabled={isSaving || !country || !region} onClick={handleCreatePlan}>
                 이 지역으로 시작
               </button>
-            )}
-            <button type="submit" className="planner-start" disabled={editingDestination || !canSearch || isSearching || !placeName.trim()}>
-              {isSearching ? '검색 중' : '검색'}
-            </button>
-            {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-              <p className="planner-search-empty" role="status">
-                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-              </p>
-            )}
-            {searchResults.length > 0 && (
-              <ul className="planner-search-results">
-                {searchResults.map((result, index) => (
-                  <li key={result.id}>
-                    <button
-                      type="button"
-                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
-                      onClick={() => {
-                        setSelectedPlaceId(result.id)
-                        setMapFocus('place')
-                      }}
-                    >
-                      <span>{index + 1}</span>
-                      <span>
-                        <strong>{result.name}</strong>
-                        {result.address && <small>{result.address}</small>}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
             {error && (
               <p className="login-error" role="alert">
@@ -752,6 +725,33 @@ function PlannerPage() {
             isAddingPlace={isUpdatingPlaces}
             onAddPlace={handleAddToPocket}
           />
+          {!isSearching && !error && emptySearchQuery === placeName.trim() && (
+            <p className="planner-search-empty" role="status">
+              검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
+            </p>
+          )}
+          {searchResults.length > 0 && (
+            <ul className="planner-search-results">
+              {searchResults.map((result, index) => (
+                <li key={result.id}>
+                  <button
+                    type="button"
+                    className={result.id === selectedPlaceId ? 'is-selected' : undefined}
+                    onClick={() => {
+                      setSelectedPlaceId(result.id)
+                      setMapFocus('place')
+                    }}
+                  >
+                    <span>{index + 1}</span>
+                    <span>
+                      <strong>{result.name}</strong>
+                      {result.address && <small>{result.address}</small>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         </MapsProvider>
         <aside className="planner-pocket">

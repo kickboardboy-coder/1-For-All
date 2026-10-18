@@ -709,6 +709,25 @@ body {
   color: #7a8983;
 }
 
+.planner-search-submit {
+  flex: 0 0 auto;
+  height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #27846e;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-search-submit:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .planner-start {
   align-self: flex-start;
   height: 40px;
@@ -729,7 +748,7 @@ body {
 }
 
 .planner-search-empty {
-  margin: 0;
+  margin: 12px 0 0;
   color: #62766e;
   font-size: 13px;
 }
@@ -738,7 +757,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
