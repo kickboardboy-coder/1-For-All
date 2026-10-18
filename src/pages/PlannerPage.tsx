@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan, updatePlanDestination, updatePlanLodging, updatePlanSchedule, type PlanLodging } from '../api/plans'
+import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanSchedule, type PlanLodging } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
@@ -25,6 +25,30 @@ import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
 
 const searchDebounceMs = 400
+const defaultDayStart = '09:00'
+const defaultDayEnd = '22:00'
+const dayTimeOptions = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2)
+  const minute = index % 2 === 0 ? '00' : '30'
+  return `${String(hour).padStart(2, '0')}:${minute}`
+})
+
+function formatKoreanTime(value: string) {
+  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+
+  if (!match) {
+    return value
+  }
+
+  const hour = Number(match[1])
+  const period = hour < 12 ? '오전' : '오후'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${period} ${String(hour12).padStart(2, '0')}:${match[2]}`
+}
+
+function timeChoices(value: string) {
+  return dayTimeOptions.includes(value) ? dayTimeOptions : [...dayTimeOptions, value].sort()
+}
 
 const steps = [
   { number: 1, label: '나라 선택' },
@@ -39,7 +63,7 @@ function PlannerPage() {
   const [error, setError] = useState('')
   const [country, setCountry] = useState('')
   const [region, setRegion] = useState('')
-  const [openMenu, setOpenMenu] = useState<'country' | 'region' | null>(null)
+  const [openMenu, setOpenMenu] = useState<'country' | 'region' | 'dayStart' | 'dayEnd' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(Boolean(planId))
@@ -49,6 +73,8 @@ function PlannerPage() {
   const [nights, setNights] = useState<number | null>(null)
   const [startDate, setStartDate] = useState<string | null>(null)
   const [lodging, setLodging] = useState<PlanLodging | null>(null)
+  const [dayStart, setDayStart] = useState(defaultDayStart)
+  const [dayEnd, setDayEnd] = useState(defaultDayEnd)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
@@ -60,6 +86,8 @@ function PlannerPage() {
   const searchTimer = useRef<number | null>(null)
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
+  const dayHoursMenu = useRef<HTMLDivElement>(null)
+  const dayHoursTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
   const activeRegion = currentStep === 1 ? region : region || plan?.region || ''
   const regions = destinations.find((item) => item.country === activeCountry)?.regions ?? []
@@ -67,6 +95,7 @@ function PlannerPage() {
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
   const stayPlaces = places.filter((place) => place.category === 'stay')
+  const dayHoursInvalid = Boolean(dayStart && dayEnd && dayStart >= dayEnd)
 
   useEffect(() => {
     if (!planId) {
@@ -103,6 +132,33 @@ function PlannerPage() {
               }
             : null,
         )
+        if (!dayHoursTouched.current) {
+          const nextStart = nextPlan.dayStart ?? defaultDayStart
+          const nextEnd = nextPlan.dayEnd ?? defaultDayEnd
+          setDayStart(nextStart)
+          setDayEnd(nextEnd)
+
+          if (!nextPlan.dayStart && !nextPlan.dayEnd && nextStart < nextEnd) {
+            setIsSavingSchedule(true)
+            void updatePlanDayHours(nextPlan.id, nextStart, nextEnd)
+              .then((updatedAt) => {
+                if (!ignore && !dayHoursTouched.current) {
+                  setPlan((current) => (current ? { ...current, dayStart: nextStart, dayEnd: nextEnd, updatedAt } : current))
+                }
+              })
+              .catch(() => {
+                if (!ignore && !dayHoursTouched.current) {
+                  setError('활동 시간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+                }
+              })
+              .finally(() => {
+                if (!ignore) {
+                  setIsSavingSchedule(false)
+                }
+              })
+          }
+        }
+
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
@@ -137,9 +193,11 @@ function PlannerPage() {
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (!destinationMenu.current?.contains(event.target as Node)) {
-        setOpenMenu(null)
+      const target = event.target as Node
+      if (destinationMenu.current?.contains(target) || dayHoursMenu.current?.contains(target)) {
+        return
       }
+      setOpenMenu(null)
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -155,6 +213,14 @@ function PlannerPage() {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
+  }, [openMenu])
+
+  useEffect(() => {
+    if (openMenu !== 'dayStart' && openMenu !== 'dayEnd') {
+      return
+    }
+
+    dayHoursMenu.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [openMenu])
 
   const canSearch = Boolean(planId || region)
@@ -290,7 +356,15 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({ country, region, nights, startDate, lodging })
+      const nextPlan = await savePlan({
+        country,
+        region,
+        nights,
+        startDate,
+        lodging,
+        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
+        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+      })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -315,7 +389,15 @@ function PlannerPage() {
           return
         }
 
-        const nextPlan = await savePlan({ country, region, nights, startDate, lodging })
+        const nextPlan = await savePlan({
+        country,
+        region,
+        nights,
+        startDate,
+        lodging,
+        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
+        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
+      })
         nextPlanId = nextPlan.id
       }
 
@@ -533,6 +615,42 @@ function PlannerPage() {
       lodgingLatitude: place.latitude,
       lodgingLongitude: place.longitude,
     })
+  }
+
+  async function persistDayHours(nextStart: string | null, nextEnd: string | null) {
+    const complete = Boolean(nextStart && nextEnd && nextStart < nextEnd)
+    const cleared = !nextStart && !nextEnd
+
+    if (!complete && !cleared) {
+      return
+    }
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanDayHours(planId, complete ? nextStart : null, complete ? nextEnd : null)
+      setPlan((current) =>
+        current
+          ? { ...current, dayStart: complete ? nextStart : null, dayEnd: complete ? nextEnd : null, updatedAt }
+          : current,
+      )
+    } catch {
+      setError('활동 시간을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeDayHours(nextStart: string, nextEnd: string) {
+    dayHoursTouched.current = true
+    setDayStart(nextStart)
+    setDayEnd(nextEnd)
+    void persistDayHours(nextStart, nextEnd)
   }
 
   function formatStartDate(value: string) {
@@ -861,6 +979,73 @@ function PlannerPage() {
               </select>
               <img src={plannerChevronDown} alt="" />
             </label>
+            <div className="planner-day-hours" ref={dayHoursMenu}>
+              <span>활동 시간</span>
+              <div className={openMenu === 'dayStart' ? 'planner-time is-open' : 'planner-time'}>
+                <button
+                  type="button"
+                  aria-label="활동 시작"
+                  aria-haspopup="listbox"
+                  aria-expanded={openMenu === 'dayStart'}
+                  disabled={isSavingSchedule}
+                  onClick={() => setOpenMenu((current) => (current === 'dayStart' ? null : 'dayStart'))}
+                >
+                  {formatKoreanTime(dayStart)}
+                </button>
+                {openMenu === 'dayStart' && (
+                  <ul className="planner-time-menu" role="listbox" aria-label="활동 시작">
+                    {timeChoices(dayStart).map((time) => (
+                      <li key={time}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={time === dayStart}
+                          onClick={() => {
+                            changeDayHours(time, dayEnd)
+                            setOpenMenu(null)
+                          }}
+                        >
+                          {formatKoreanTime(time)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <span>~</span>
+              <div className={openMenu === 'dayEnd' ? 'planner-time is-open' : 'planner-time'}>
+                <button
+                  type="button"
+                  aria-label="활동 종료"
+                  aria-haspopup="listbox"
+                  aria-expanded={openMenu === 'dayEnd'}
+                  disabled={isSavingSchedule}
+                  onClick={() => setOpenMenu((current) => (current === 'dayEnd' ? null : 'dayEnd'))}
+                >
+                  {formatKoreanTime(dayEnd)}
+                </button>
+                {openMenu === 'dayEnd' && (
+                  <ul className="planner-time-menu" role="listbox" aria-label="활동 종료">
+                    {timeChoices(dayEnd).map((time) => (
+                      <li key={time}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={time === dayEnd}
+                          onClick={() => {
+                            changeDayHours(dayStart, time)
+                            setOpenMenu(null)
+                          }}
+                        >
+                          {formatKoreanTime(time)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            {dayHoursInvalid && <p className="planner-day-hours-note">종료 시각은 시작 시각보다 늦어야 해요.</p>}
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
           <button type="button" className="planner-optimize" disabled>

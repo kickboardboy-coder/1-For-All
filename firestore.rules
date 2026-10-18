@@ -16,6 +16,8 @@ rules_version = '2';
 //   - lodgingName: string or null - lodging name
 //   - lodgingLatitude: number or null - lodging latitude
 //   - lodgingLongitude: number or null - lodging longitude
+//   - dayStart: string HH:mm or null - daily activity start
+//   - dayEnd: string HH:mm or null - daily activity end
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
 //
@@ -54,6 +56,8 @@ service cloud.firestore {
         'lodgingName',
         'lodgingLatitude',
         'lodgingLongitude',
+        'dayStart',
+        'dayEnd',
         'status',
         'updatedAt',
       ])
@@ -66,6 +70,7 @@ service cloud.firestore {
         && (data.nights == null || (data.nights is int && data.nights >= 0 && data.nights <= 60))
         && (data.startDate == null || (data.startDate is string && data.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))
         && isValidLodging(data)
+        && isValidDayHours(data)
         && data.status in ['pending', 'optimized']
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
@@ -87,6 +92,18 @@ service cloud.firestore {
           && data.lodgingLongitude is number
           && data.lodgingLongitude >= -180
           && data.lodgingLongitude <= 180
+        );
+    }
+
+    function isValidDayHours(data) {
+      return (!('dayStart' in data) && !('dayEnd' in data))
+        || (data.dayStart == null && data.dayEnd == null)
+        || (
+          data.dayStart is string
+          && data.dayEnd is string
+          && data.dayStart.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+          && data.dayEnd.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+          && data.dayStart < data.dayEnd
         );
     }
 

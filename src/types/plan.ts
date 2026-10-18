@@ -18,6 +18,8 @@ export type Plan = {
   lodgingName: string | null
   lodgingLatitude: number | null
   lodgingLongitude: number | null
+  dayStart: string | null
+  dayEnd: string | null
   status: PlanStatus
   updatedAt: string
 }
