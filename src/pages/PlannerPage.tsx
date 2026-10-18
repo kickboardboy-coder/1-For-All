@@ -108,6 +108,15 @@ function PlannerPage() {
   const days = nights === null ? null : nights + 1
   const stayPlaces = places.filter((place) => place.category === 'stay')
   const dayHoursInvalid = Boolean(dayStart && dayEnd && dayStart >= dayEnd)
+  const missingRequirements = [
+    !planId ? '저장된 계획' : null,
+    nights === null ? '여행 기간' : null,
+    !startDate ? '출발일' : null,
+    !lodging ? '숙소' : null,
+    !(dayStart && dayEnd && dayStart < dayEnd) ? '활동 시간' : null,
+    places.length === 0 ? '담은 장소' : null,
+  ].filter((item): item is string => Boolean(item))
+  const canOptimize = missingRequirements.length === 0
 
   useEffect(() => {
     if (!planId) {
@@ -538,6 +547,12 @@ function PlannerPage() {
       setError('장소를 비우지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsUpdatingPlaces(false)
+    }
+  }
+
+  function handleOptimize() {
+    if (!canOptimize || !planId) {
+      return
     }
   }
 
@@ -1124,13 +1139,15 @@ function PlannerPage() {
             </div>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
-          <button type="button" className="planner-optimize" disabled>
+          <button type="button" className="planner-optimize" disabled={!canOptimize} onClick={handleOptimize}>
             <img src={plannerSparkles} alt="" />
             최적의 여행 계획 만들기
             <img src={plannerArrow} alt="" />
           </button>
           <p className="planner-optimize-note">
-            인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.
+            {canOptimize
+              ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
+              : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
           </p>
           <button
             type="button"
