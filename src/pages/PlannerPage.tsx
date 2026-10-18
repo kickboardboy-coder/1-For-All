@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { getPlan, savePlan, touchPlan, updatePlanDestination, updatePlanSchedule } from '../api/plans'
+import { getPlan, savePlan, touchPlan, updatePlanDestination, updatePlanLodging, updatePlanSchedule, type PlanLodging } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
@@ -48,6 +48,7 @@ function PlannerPage() {
   const [isSavingPlaces, setIsSavingPlaces] = useState(false)
   const [nights, setNights] = useState<number | null>(null)
   const [startDate, setStartDate] = useState<string | null>(null)
+  const [lodging, setLodging] = useState<PlanLodging | null>(null)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
@@ -65,6 +66,7 @@ function PlannerPage() {
   const mapRegion = findRegion(activeCountry, activeRegion)
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
+  const stayPlaces = places.filter((place) => place.category === 'stay')
 
   useEffect(() => {
     if (!planId) {
@@ -91,6 +93,16 @@ function PlannerPage() {
         setRegion(nextPlan.region)
         setNights(nextPlan.nights)
         setStartDate(nextPlan.startDate)
+        setLodging(
+          nextPlan.lodgingPlaceId && nextPlan.lodgingName && nextPlan.lodgingLatitude !== null && nextPlan.lodgingLongitude !== null
+            ? {
+                lodgingPlaceId: nextPlan.lodgingPlaceId,
+                lodgingName: nextPlan.lodgingName,
+                lodgingLatitude: nextPlan.lodgingLatitude,
+                lodgingLongitude: nextPlan.lodgingLongitude,
+              }
+            : null,
+        )
         return getPlaces(planId)
       })
       .then((nextPlaces) => {
@@ -278,7 +290,7 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({ country, region, nights, startDate })
+      const nextPlan = await savePlan({ country, region, nights, startDate, lodging })
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -303,7 +315,7 @@ function PlannerPage() {
           return
         }
 
-        const nextPlan = await savePlan({ country, region, nights, startDate })
+        const nextPlan = await savePlan({ country, region, nights, startDate, lodging })
         nextPlanId = nextPlan.id
       }
 
@@ -349,7 +361,25 @@ function PlannerPage() {
 
     try {
       await deletePlace(planId, placeId)
-      setPlaces((current) => current.filter((place) => place.id !== placeId))
+      const nextPlaces = places.filter((place) => place.id !== placeId)
+      setPlaces(nextPlaces)
+
+      if (lodging?.lodgingPlaceId === placeId) {
+        const updatedAt = await updatePlanLodging(planId, null)
+        setLodging(null)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                lodgingPlaceId: null,
+                lodgingName: null,
+                lodgingLatitude: null,
+                lodgingLongitude: null,
+                updatedAt,
+              }
+            : current,
+        )
+      }
     } catch {
       setError('장소를 빼지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
@@ -368,6 +398,23 @@ function PlannerPage() {
     try {
       await clearPlaces(planId)
       setPlaces([])
+
+      if (lodging) {
+        const updatedAt = await updatePlanLodging(planId, null)
+        setLodging(null)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                lodgingPlaceId: null,
+                lodgingName: null,
+                lodgingLatitude: null,
+                lodgingLongitude: null,
+                updatedAt,
+              }
+            : current,
+        )
+      }
     } catch {
       setError('장소를 비우지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
@@ -435,6 +482,57 @@ function PlannerPage() {
   function changeStartDate(value: string) {
     const nextStartDate = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
     void persistSchedule(nights, nextStartDate)
+  }
+
+  async function persistLodging(nextLodging: PlanLodging | null) {
+    setLodging(nextLodging)
+
+    if (!planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanLodging(planId, nextLodging)
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              lodgingPlaceId: nextLodging?.lodgingPlaceId ?? null,
+              lodgingName: nextLodging?.lodgingName ?? null,
+              lodgingLatitude: nextLodging?.lodgingLatitude ?? null,
+              lodgingLongitude: nextLodging?.lodgingLongitude ?? null,
+              updatedAt,
+            }
+          : current,
+      )
+    } catch {
+      setError('숙소 위치를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeLodging(placeId: string) {
+    if (!placeId) {
+      void persistLodging(null)
+      return
+    }
+
+    const place = stayPlaces.find((item) => item.id === placeId)
+
+    if (!place) {
+      return
+    }
+
+    void persistLodging({
+      lodgingPlaceId: place.id,
+      lodgingName: place.name,
+      lodgingLatitude: place.latitude,
+      lodgingLongitude: place.longitude,
+    })
   }
 
   function formatStartDate(value: string) {
@@ -742,6 +840,26 @@ function PlannerPage() {
                 disabled={isSavingSchedule}
                 onChange={(event) => changeStartDate(event.target.value)}
               />
+            </label>
+            <label className="planner-lodging">
+              <img src={plannerPin} alt="" />
+              <select
+                aria-label="숙소 위치"
+                value={lodging?.lodgingPlaceId ?? ''}
+                disabled={isSavingSchedule || stayPlaces.length === 0}
+                onChange={(event) => changeLodging(event.target.value)}
+              >
+                <option value="">{stayPlaces.length === 0 ? '숙소를 먼저 담아 주세요' : '숙소를 선택해 주세요'}</option>
+                {lodging && !stayPlaces.some((place) => place.id === lodging.lodgingPlaceId) && (
+                  <option value={lodging.lodgingPlaceId}>{lodging.lodgingName}</option>
+                )}
+                {stayPlaces.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+              <img src={plannerChevronDown} alt="" />
             </label>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>

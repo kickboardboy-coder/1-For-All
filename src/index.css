@@ -1147,6 +1147,36 @@ body {
   cursor: pointer;
 }
 
+.planner-lodging {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.planner-lodging select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #243d37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+.planner-lodging select:disabled {
+  color: #7a8983;
+  cursor: default;
+}
+
 .planner-date strong {
   color: #243d37;
   font-size: 12px;
