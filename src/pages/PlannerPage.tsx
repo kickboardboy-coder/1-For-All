@@ -90,6 +90,7 @@ function PlannerPage() {
   const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [isOptimizing, setIsOptimizing] = useState(false)
+  const [optimizeError, setOptimizeError] = useState('')
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
@@ -562,7 +563,7 @@ function PlannerPage() {
     }
 
     setIsOptimizing(true)
-    setError('')
+    setOptimizeError('')
     setItinerary(null)
 
     try {
@@ -585,7 +586,7 @@ function PlannerPage() {
       const message = error instanceof Error ? error.message : ''
       const known =
         message.startsWith('최적화') || message.startsWith('OpenAI') || message.startsWith('로그인') || message.startsWith('플랜 상태')
-      setError(known ? message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      setOptimizeError(known ? message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsOptimizing(false)
     }
@@ -1190,6 +1191,14 @@ function PlannerPage() {
                   ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
                   : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
           </p>
+          {optimizeError && (
+            <div className="planner-optimize-retry">
+              <p role="alert">{optimizeError}</p>
+              <button type="button" disabled={!canOptimize || isOptimizing} onClick={handleOptimize}>
+                다시 시도
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="planner-save"

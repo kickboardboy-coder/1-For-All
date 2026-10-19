@@ -1399,6 +1399,40 @@ body {
   cursor: pointer;
 }
 
+.planner-optimize-retry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.planner-optimize-retry p {
+  margin: 0;
+  color: #c4514a;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.planner-optimize-retry button {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #e8f4ef;
+  color: #27846e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-optimize-retry button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .planner-pocket-heading button:disabled,
 .planner-places button:disabled,
 .planner-counters button:disabled {
