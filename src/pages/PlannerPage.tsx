@@ -578,12 +578,13 @@ function PlannerPage() {
         lodging,
         places,
       })
-      await saveItinerary(nextItinerary)
+      const updatedAt = await saveItinerary(nextItinerary)
       setItinerary(nextItinerary)
+      setPlan((current) => (current ? { ...current, status: 'optimized', updatedAt } : current))
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
       const known =
-        message.startsWith('최적화') || message.startsWith('OpenAI') || message.startsWith('로그인')
+        message.startsWith('최적화') || message.startsWith('OpenAI') || message.startsWith('로그인') || message.startsWith('플랜 상태')
       setError(known ? message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsOptimizing(false)

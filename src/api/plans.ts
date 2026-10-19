@@ -133,6 +133,18 @@ export async function updatePlanMeals(planId: string, meals: PlanMeals) {
   return updatedAt
 }
 
+export async function markPlanOptimized(planId: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const updatedAt = new Date().toISOString()
+  await updateDoc(doc(db, 'plans', planId), { status: 'optimized', updatedAt })
+  return updatedAt
+}
+
 export async function touchPlan(planId: string) {
   const user = auth.currentUser
 

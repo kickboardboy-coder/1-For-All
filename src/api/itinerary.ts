@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../firebase'
-import { touchPlan } from './plans'
+import { markPlanOptimized } from './plans'
 import type { PlanLodging, PlanMeals } from './plans'
 import { itineraryStopKinds, type Itinerary, type ItineraryDay, type ItineraryStop, type ItineraryStopKind } from '../types/itinerary'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
@@ -364,7 +364,16 @@ export async function saveItinerary(itinerary: Itinerary) {
   })
 
   await commitRefs(operations)
-  await touchPlan(itinerary.planId)
+
+  try {
+    return await markPlanOptimized(itinerary.planId)
+  } catch (error) {
+    if (error instanceof Error && error.message === '로그인된 사용자가 없습니다.') {
+      throw error
+    }
+
+    throw new Error('플랜 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  }
 }
 
 function savedStop(data: Record<string, unknown>): (ItineraryStop & { day: number; date: string; order: number }) | null {
