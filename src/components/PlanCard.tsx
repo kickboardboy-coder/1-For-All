@@ -59,7 +59,7 @@ function formatUpdatedAt(value: string) {
 
 function PlanCard({ plan, isRecent, placeCount }: PlanCardProps) {
   return (
-    <Link to={`/planner/${plan.id}`} className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
+    <Link to={plan.status === 'optimized' ? `/result/${plan.id}` : `/planner/${plan.id}`} className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
       <div className="plan-card-thumb" aria-hidden="true" />
       <div className="plan-card-main">
         <div className="plan-card-title">

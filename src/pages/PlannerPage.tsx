@@ -144,6 +144,10 @@ function PlannerPage() {
         }
 
         setPlan(nextPlan)
+        if (nextPlan.status === 'optimized') {
+          navigate(`/result/${nextPlan.id}`, { replace: true })
+          return
+        }
         setCountry(nextPlan.country ?? '')
         setRegion(nextPlan.region)
         setNights(nextPlan.nights)
@@ -232,7 +236,7 @@ function PlannerPage() {
     return () => {
       ignore = true
     }
-  }, [planId])
+  }, [navigate, planId])
 
   useEffect(() => {
     setCurrentStep(planId ? 2 : 1)
@@ -582,6 +586,7 @@ function PlannerPage() {
       const updatedAt = await saveItinerary(nextItinerary)
       setItinerary(nextItinerary)
       setPlan((current) => (current ? { ...current, status: 'optimized', updatedAt } : current))
+      navigate(`/result/${planId}`, { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
       const known =

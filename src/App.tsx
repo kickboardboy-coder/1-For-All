@@ -22,7 +22,7 @@ function App() {
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/planner/new" element={<PlannerPage />} />
           <Route path="/planner/:planId" element={<PlannerPage />} />
-          <Route path="/result" element={<ResultPage />} />
+          <Route path="/result/:planId" element={<ResultPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
