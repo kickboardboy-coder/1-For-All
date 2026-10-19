@@ -1,4 +1,7 @@
 import axios from 'axios'
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
+import { auth, db } from '../firebase'
+import { touchPlan } from './plans'
 import type { PlanLodging, PlanMeals } from './plans'
 import { itineraryStopKinds, type Itinerary, type ItineraryDay, type ItineraryStop, type ItineraryStopKind } from '../types/itinerary'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
@@ -296,4 +299,140 @@ export async function requestItinerary({
 
     throw new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.')
   }
+}
+
+function itineraryCollection(planId: string) {
+  return collection(db, 'plans', planId, 'itinerary')
+}
+
+function stopDocId(day: number, order: number) {
+  return `${String(day).padStart(2, '0')}-${String(order).padStart(2, '0')}`
+}
+
+function requireUser() {
+  if (!auth.currentUser) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+}
+
+async function commitRefs(operations: Array<{ kind: 'delete' | 'set'; ref: ReturnType<typeof doc>; data?: Record<string, unknown> }>) {
+  const chunkSize = 400
+
+  for (let index = 0; index < operations.length; index += chunkSize) {
+    const batch = writeBatch(db)
+    operations.slice(index, index + chunkSize).forEach((operation) => {
+      if (operation.kind === 'delete') {
+        batch.delete(operation.ref)
+        return
+      }
+
+      batch.set(operation.ref, operation.data ?? {})
+    })
+    await batch.commit()
+  }
+}
+
+export async function saveItinerary(itinerary: Itinerary) {
+  requireUser()
+
+  const existing = await getDocs(itineraryCollection(itinerary.planId))
+  const operations: Array<{ kind: 'delete' | 'set'; ref: ReturnType<typeof doc>; data?: Record<string, unknown> }> = existing.docs.map((item) => ({
+    kind: 'delete',
+    ref: item.ref,
+  }))
+
+  itinerary.days.forEach((day) => {
+    day.stops.forEach((stop, order) => {
+      operations.push({
+        kind: 'set',
+        ref: doc(itineraryCollection(itinerary.planId), stopDocId(day.day, order)),
+        data: {
+          planId: itinerary.planId,
+          day: day.day,
+          date: day.date,
+          order,
+          placeId: stop.placeId,
+          name: stop.name,
+          category: stop.category,
+          kind: stop.kind,
+          startTime: stop.startTime,
+          endTime: stop.endTime,
+          travelMinutes: stop.travelMinutes,
+        },
+      })
+    })
+  })
+
+  await commitRefs(operations)
+  await touchPlan(itinerary.planId)
+}
+
+function savedStop(data: Record<string, unknown>): (ItineraryStop & { day: number; date: string; order: number }) | null {
+  if (
+    typeof data.day !== 'number' ||
+    typeof data.date !== 'string' ||
+    typeof data.order !== 'number' ||
+    typeof data.placeId !== 'string' ||
+    typeof data.name !== 'string' ||
+    !isCategory(data.category) ||
+    !isKind(data.kind) ||
+    !isTime(data.startTime) ||
+    !isTime(data.endTime) ||
+    !(data.travelMinutes === null || typeof data.travelMinutes === 'number')
+  ) {
+    return null
+  }
+
+  return {
+    day: data.day,
+    date: data.date,
+    order: data.order,
+    placeId: data.placeId,
+    name: data.name,
+    category: data.category,
+    kind: data.kind,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    travelMinutes: data.travelMinutes,
+  }
+}
+
+export async function getItinerary(planId: string): Promise<Itinerary | null> {
+  requireUser()
+
+  const snapshot = await getDocs(itineraryCollection(planId))
+  const stops = snapshot.docs
+    .flatMap((item) => {
+      const stop = savedStop(item.data())
+      return stop ? [stop] : []
+    })
+    .sort((left, right) => left.day - right.day || left.order - right.order)
+
+  if (stops.length === 0) {
+    return null
+  }
+
+  const days: ItineraryDay[] = []
+
+  stops.forEach((stop) => {
+    const current = days.at(-1)
+    const nextStop = {
+      placeId: stop.placeId,
+      name: stop.name,
+      category: stop.category,
+      kind: stop.kind,
+      startTime: stop.startTime,
+      endTime: stop.endTime,
+      travelMinutes: stop.travelMinutes,
+    }
+
+    if (current && current.day === stop.day) {
+      current.stops.push(nextStop)
+      return
+    }
+
+    days.push({ day: stop.day, date: stop.date, stops: [nextStop] })
+  })
+
+  return { planId, days }
 }

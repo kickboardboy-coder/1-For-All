@@ -14,7 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
-import { requestItinerary } from '../api/itinerary'
+import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
@@ -207,17 +207,19 @@ function PlannerPage() {
           }
         }
 
-        return getPlaces(planId)
+        return Promise.all([getPlaces(planId), getItinerary(planId)])
       })
-      .then((nextPlaces) => {
-        if (ignore) {
+      .then((loaded) => {
+        if (ignore || !loaded) {
           return
         }
 
+        const [nextPlaces, nextItinerary] = loaded
         setIsLoadingPlaces(false)
         if (nextPlaces) {
           setPlaces(nextPlaces)
         }
+        setItinerary((current) => current ?? nextItinerary)
       })
       .catch(() => {
         if (!ignore) {
@@ -576,9 +578,13 @@ function PlannerPage() {
         lodging,
         places,
       })
+      await saveItinerary(nextItinerary)
       setItinerary(nextItinerary)
     } catch (error) {
-      setError(error instanceof Error ? error.message : '최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      const message = error instanceof Error ? error.message : ''
+      const known =
+        message.startsWith('최적화') || message.startsWith('OpenAI') || message.startsWith('로그인')
+      setError(known ? message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setIsOptimizing(false)
     }
@@ -948,33 +954,35 @@ function PlannerPage() {
             isAddingPlace={isUpdatingPlaces}
             onAddPlace={handleAddToPocket}
           />
-          {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-            <p className="planner-search-empty" role="status">
-              검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-            </p>
-          )}
-          {searchResults.length > 0 && (
-            <ul className="planner-search-results">
-              {searchResults.map((result, index) => (
-                <li key={result.id}>
-                  <button
-                    type="button"
-                    className={result.id === selectedPlaceId ? 'is-selected' : undefined}
-                    onClick={() => {
-                      setSelectedPlaceId(result.id)
-                      setMapFocus('place')
-                    }}
-                  >
-                    <span>{index + 1}</span>
-                    <span>
-                      <strong>{result.name}</strong>
-                      {result.address && <small>{result.address}</small>}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="planner-search-results-slot">
+            {!isSearching && !error && emptySearchQuery === placeName.trim() && (
+              <p className="planner-search-empty" role="status">
+                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
+              </p>
+            )}
+            {searchResults.length > 0 && (
+              <ul className="planner-search-results">
+                {searchResults.map((result, index) => (
+                  <li key={result.id}>
+                    <button
+                      type="button"
+                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
+                      onClick={() => {
+                        setSelectedPlaceId(result.id)
+                        setMapFocus('place')
+                      }}
+                    >
+                      <span>{index + 1}</span>
+                      <span>
+                        <strong>{result.name}</strong>
+                        {result.address && <small>{result.address}</small>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         </MapsProvider>
         <aside className="planner-pocket">
@@ -1174,7 +1182,7 @@ function PlannerPage() {
           </button>
           <p className="planner-optimize-note">
             {itinerary
-              ? `${itinerary.days.length}일 일정을 받았어요.`
+              ? `${itinerary.days.length}일 일정을 저장했어요.`
               : isOptimizing
                 ? '주머니 장소, 숙소, 기간, 휴무, 이동 시간을 반영해 일정을 요청하고 있어요.'
                 : canOptimize
