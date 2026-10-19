@@ -14,6 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
+import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
@@ -21,6 +22,7 @@ import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSe
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
+import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
 
@@ -87,6 +89,9 @@ function PlannerPage() {
   const [dayEnd, setDayEnd] = useState(defaultDayEnd)
   const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [optimizeError, setOptimizeError] = useState('')
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
@@ -139,6 +144,10 @@ function PlannerPage() {
         }
 
         setPlan(nextPlan)
+        if (nextPlan.status === 'optimized') {
+          navigate(`/result/${nextPlan.id}`, { replace: true })
+          return
+        }
         setCountry(nextPlan.country ?? '')
         setRegion(nextPlan.region)
         setNights(nextPlan.nights)
@@ -203,17 +212,19 @@ function PlannerPage() {
           }
         }
 
-        return getPlaces(planId)
+        return Promise.all([getPlaces(planId), getItinerary(planId)])
       })
-      .then((nextPlaces) => {
-        if (ignore) {
+      .then((loaded) => {
+        if (ignore || !loaded) {
           return
         }
 
+        const [nextPlaces, nextItinerary] = loaded
         setIsLoadingPlaces(false)
         if (nextPlaces) {
           setPlaces(nextPlaces)
         }
+        setItinerary((current) => current ?? nextItinerary)
       })
       .catch(() => {
         if (!ignore) {
@@ -225,7 +236,7 @@ function PlannerPage() {
     return () => {
       ignore = true
     }
-  }, [planId])
+  }, [navigate, planId])
 
   useEffect(() => {
     setCurrentStep(planId ? 2 : 1)
@@ -550,9 +561,39 @@ function PlannerPage() {
     }
   }
 
-  function handleOptimize() {
-    if (!canOptimize || !planId) {
+  async function handleOptimize() {
+    if (!canOptimize || !planId || nights === null || !startDate || !lodging || !(dayStart && dayEnd && dayStart < dayEnd)) {
       return
+    }
+
+    setIsOptimizing(true)
+    setOptimizeError('')
+    setItinerary(null)
+
+    try {
+      const nextItinerary = await requestItinerary({
+        planId,
+        country: activeCountry || null,
+        region: activeRegion,
+        nights,
+        startDate,
+        dayStart,
+        dayEnd,
+        meals,
+        lodging,
+        places,
+      })
+      const updatedAt = await saveItinerary(nextItinerary)
+      setItinerary(nextItinerary)
+      setPlan((current) => (current ? { ...current, status: 'optimized', updatedAt } : current))
+      navigate(`/result/${planId}`, { replace: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      const known =
+        message.startsWith('최적화') || message.startsWith('OpenAI') || message.startsWith('로그인') || message.startsWith('플랜 상태')
+      setOptimizeError(known ? message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsOptimizing(false)
     }
   }
 
@@ -920,33 +961,35 @@ function PlannerPage() {
             isAddingPlace={isUpdatingPlaces}
             onAddPlace={handleAddToPocket}
           />
-          {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-            <p className="planner-search-empty" role="status">
-              검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-            </p>
-          )}
-          {searchResults.length > 0 && (
-            <ul className="planner-search-results">
-              {searchResults.map((result, index) => (
-                <li key={result.id}>
-                  <button
-                    type="button"
-                    className={result.id === selectedPlaceId ? 'is-selected' : undefined}
-                    onClick={() => {
-                      setSelectedPlaceId(result.id)
-                      setMapFocus('place')
-                    }}
-                  >
-                    <span>{index + 1}</span>
-                    <span>
-                      <strong>{result.name}</strong>
-                      {result.address && <small>{result.address}</small>}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="planner-search-results-slot">
+            {!isSearching && !error && emptySearchQuery === placeName.trim() && (
+              <p className="planner-search-empty" role="status">
+                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
+              </p>
+            )}
+            {searchResults.length > 0 && (
+              <ul className="planner-search-results">
+                {searchResults.map((result, index) => (
+                  <li key={result.id}>
+                    <button
+                      type="button"
+                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
+                      onClick={() => {
+                        setSelectedPlaceId(result.id)
+                        setMapFocus('place')
+                      }}
+                    >
+                      <span>{index + 1}</span>
+                      <span>
+                        <strong>{result.name}</strong>
+                        {result.address && <small>{result.address}</small>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         </MapsProvider>
         <aside className="planner-pocket">
@@ -1139,16 +1182,28 @@ function PlannerPage() {
             </div>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
-          <button type="button" className="planner-optimize" disabled={!canOptimize} onClick={handleOptimize}>
+          <button type="button" className="planner-optimize" disabled={!canOptimize || isOptimizing} onClick={handleOptimize}>
             <img src={plannerSparkles} alt="" />
-            최적의 여행 계획 만들기
+            {isOptimizing ? '일정을 만드는 중' : '최적의 여행 계획 만들기'}
             <img src={plannerArrow} alt="" />
           </button>
           <p className="planner-optimize-note">
-            {canOptimize
-              ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
-              : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
+            {itinerary
+              ? `${itinerary.days.length}일 일정을 저장했어요.`
+              : isOptimizing
+                ? '주머니 장소, 숙소, 기간, 휴무, 이동 시간을 반영해 일정을 요청하고 있어요.'
+                : canOptimize
+                  ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
+                  : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
           </p>
+          {optimizeError && (
+            <div className="planner-optimize-retry">
+              <p role="alert">{optimizeError}</p>
+              <button type="button" disabled={!canOptimize || isOptimizing} onClick={handleOptimize}>
+                다시 시도
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="planner-save"

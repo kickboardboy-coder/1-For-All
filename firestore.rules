@@ -36,6 +36,21 @@ rules_version = '2';
 //   - closedDays: string (max 80) or null (required)
 //   - breakTime: string (max 80) or null (required)
 //
+// Subcollection: plans/{planId}/itinerary
+// Document ID: day-order, for example 01-00
+// Fields:
+//   - planId: string (required) - parent plan id
+//   - day: int (required, 1-61) - trip day number
+//   - date: string YYYY-MM-DD (required)
+//   - order: int (required, 0-40) - visit order within the day
+//   - placeId: string (required, 1-128 bytes)
+//   - name: string (required, 1-300 bytes)
+//   - category: string (required) - sight, food, or stay
+//   - kind: string (required) - lodging, visit, breakfast, lunch, or dinner
+//   - startTime: string HH:mm (required)
+//   - endTime: string HH:mm (required)
+//   - travelMinutes: int or null (required) - minutes from the previous stop
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -150,6 +165,33 @@ service cloud.firestore {
         && isOptionalText(request.resource.data.breakTime);
     }
 
+    function isValidItineraryStop(planId) {
+      return request.resource.data.keys().hasOnly(['planId', 'day', 'date', 'order', 'placeId', 'name', 'category', 'kind', 'startTime', 'endTime', 'travelMinutes'])
+        && request.resource.data.planId == planId
+        && request.resource.data.day is int
+        && request.resource.data.day >= 1
+        && request.resource.data.day <= 61
+        && request.resource.data.date is string
+        && request.resource.data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && request.resource.data.order is int
+        && request.resource.data.order >= 0
+        && request.resource.data.order <= 40
+        && request.resource.data.placeId is string
+        && request.resource.data.placeId.size() > 0
+        && request.resource.data.placeId.size() <= 128
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 300
+        && request.resource.data.category in ['sight', 'food', 'stay']
+        && request.resource.data.kind in ['lodging', 'visit', 'breakfast', 'lunch', 'dinner']
+        && request.resource.data.startTime is string
+        && request.resource.data.endTime is string
+        && request.resource.data.startTime.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+        && request.resource.data.endTime.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
+        && request.resource.data.startTime < request.resource.data.endTime
+        && (request.resource.data.travelMinutes == null || (request.resource.data.travelMinutes is int && request.resource.data.travelMinutes >= 0 && request.resource.data.travelMinutes <= 1440));
+    }
+
     match /plans/{planId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated()
@@ -167,6 +209,12 @@ service cloud.firestore {
         allow update: if isPlanOwner(planId)
           && isValidPlace(planId)
           && request.resource.data.planId == resource.data.planId;
+        allow delete: if isPlanOwner(planId);
+      }
+
+      match /itinerary/{stopId} {
+        allow read: if isPlanOwner(planId);
+        allow create, update: if isPlanOwner(planId) && isValidItineraryStop(planId);
         allow delete: if isPlanOwner(planId);
       }
     }
