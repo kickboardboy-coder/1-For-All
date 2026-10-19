@@ -14,6 +14,7 @@ import plannerPin from '../assets/planner-pin.svg'
 import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
+import { requestItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
@@ -21,6 +22,7 @@ import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSe
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
+import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
 
@@ -87,6 +89,8 @@ function PlannerPage() {
   const [dayEnd, setDayEnd] = useState(defaultDayEnd)
   const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
@@ -550,9 +554,33 @@ function PlannerPage() {
     }
   }
 
-  function handleOptimize() {
-    if (!canOptimize || !planId) {
+  async function handleOptimize() {
+    if (!canOptimize || !planId || nights === null || !startDate || !lodging || !(dayStart && dayEnd && dayStart < dayEnd)) {
       return
+    }
+
+    setIsOptimizing(true)
+    setError('')
+    setItinerary(null)
+
+    try {
+      const nextItinerary = await requestItinerary({
+        planId,
+        country: activeCountry || null,
+        region: activeRegion,
+        nights,
+        startDate,
+        dayStart,
+        dayEnd,
+        meals,
+        lodging,
+        places,
+      })
+      setItinerary(nextItinerary)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsOptimizing(false)
     }
   }
 
@@ -1139,15 +1167,19 @@ function PlannerPage() {
             </div>
             <p>출발일에 맞춰 휴무일도 함께 확인해요.</p>
           </div>
-          <button type="button" className="planner-optimize" disabled={!canOptimize} onClick={handleOptimize}>
+          <button type="button" className="planner-optimize" disabled={!canOptimize || isOptimizing} onClick={handleOptimize}>
             <img src={plannerSparkles} alt="" />
-            최적의 여행 계획 만들기
+            {isOptimizing ? '일정을 만드는 중' : '최적의 여행 계획 만들기'}
             <img src={plannerArrow} alt="" />
           </button>
           <p className="planner-optimize-note">
-            {canOptimize
-              ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
-              : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
+            {itinerary
+              ? `${itinerary.days.length}일 일정을 받았어요.`
+              : isOptimizing
+                ? '주머니 장소, 숙소, 기간, 휴무, 이동 시간을 반영해 일정을 요청하고 있어요.'
+                : canOptimize
+                  ? '인공지능이 영업시간·휴무일·브레이크 타임과 실제 거리를 고려해 동선을 정리해요.'
+                  : `필수 값이 없으면 최적화를 시작할 수 없어요. (${missingRequirements.join(' · ')})`}
           </p>
           <button
             type="button"
