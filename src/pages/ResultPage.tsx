@@ -4,7 +4,7 @@ import { getItinerary, saveItinerary, travelMinutes } from '../api/itinerary'
 import { getPlan, markPlanSaved } from '../api/plans'
 import { getPlaces } from '../api/places'
 import MapsProvider from '../components/MapsProvider'
-import ResultMap, { dayColorNames, dayColors, dayRoutesFrom } from '../components/ResultMap'
+import ResultMap, { dayColorNameOf, dayColorOf, dayColors, dayRoutesFrom } from '../components/ResultMap'
 import { findRegion } from '../data/destinations'
 import resultArrowLeft from '../assets/result-arrow-left.svg'
 import resultBookmark from '../assets/result-bookmark.svg'
@@ -136,6 +136,8 @@ function ResultPage() {
   const [draft, setDraft] = useState<Itinerary | null>(null)
   const [isSavingEdits, setIsSavingEdits] = useState(false)
   const [editError, setEditError] = useState('')
+  const [dayColorIndexes, setDayColorIndexes] = useState<Record<number, number>>({})
+  const [colorPickerDay, setColorPickerDay] = useState<number | null>(null)
 
   useEffect(() => {
     if (!planId) {
@@ -175,6 +177,32 @@ function ResultPage() {
 
     return () => {
       ignore = true
+    }
+  }, [planId])
+
+  useEffect(() => {
+    if (!planId) {
+      return
+    }
+
+    try {
+      const raw = localStorage.getItem(`euihang-day-colors:${planId}`)
+      const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+      const indexes = Object.fromEntries(
+        Object.entries(parsed).flatMap(([day, index]) => {
+          const dayNumber = Number(day)
+          const colorIndex = typeof index === 'number' ? index : Number(index)
+
+          if (!Number.isInteger(dayNumber) || dayNumber < 1 || !Number.isInteger(colorIndex) || colorIndex < 0 || colorIndex >= dayColors.length) {
+            return []
+          }
+
+          return [[dayNumber, colorIndex] as const]
+        }),
+      )
+      setDayColorIndexes(indexes)
+    } catch {
+      setDayColorIndexes({})
     }
   }, [planId])
 
@@ -219,7 +247,9 @@ function ResultPage() {
           longitude: plan.lodgingLongitude,
         }
       : null
-  const routes = dayRoutesFrom(schedule, places, lodging).filter((route) => visibleDays.includes(route.day))
+  const routes = dayRoutesFrom(schedule, places, lodging)
+    .map((route) => ({ ...route, color: dayColorOf(route.day, dayColorIndexes) }))
+    .filter((route) => visibleDays.includes(route.day))
   const legendDays = scheduleDays.length > 0 ? scheduleDays.map((day) => day.day) : Array.from({ length: days }, (_, index) => index + 1)
   const mapRangeLabel =
     visibleDays.length === 0
@@ -229,6 +259,19 @@ function ResultPage() {
         : visibleDays.length === 1
           ? `${visibleDays[0]}일차 표시 중`
           : `${visibleDays.length}일 일정 표시 중`
+
+  function chooseDayColor(day: number, colorIndex: number) {
+    setDayColorIndexes((current) => {
+      const next = { ...current, [day]: colorIndex }
+
+      if (planId) {
+        localStorage.setItem(`euihang-day-colors:${planId}`, JSON.stringify(next))
+      }
+
+      return next
+    })
+    setColorPickerDay(null)
+  }
 
   function toggleDay(day: number) {
     setVisibleDays((current) =>
@@ -435,12 +478,47 @@ function ResultPage() {
           </MapsProvider>
           <div className="result-legend">
             {legendDays.map((day) => (
-              <label key={day}>
-                <input type="checkbox" checked={visibleDays.includes(day)} onChange={() => toggleDay(day)} />
-                <span style={{ background: dayColors[(day - 1) % dayColors.length] }} />
-                {day}일차 · {dayColorNames[(day - 1) % dayColorNames.length]}
-              </label>
+              <div key={day} className="result-legend-item">
+                <label>
+                  <input type="checkbox" checked={visibleDays.includes(day)} onChange={() => toggleDay(day)} />
+                  {day}일차 · {dayColorNameOf(day, dayColorIndexes)}
+                </label>
+                <button
+                  type="button"
+                  className={colorPickerDay === day ? 'result-legend-yarn is-open' : 'result-legend-yarn'}
+                  aria-label={`${day}일차 색상 고르기`}
+                  aria-expanded={colorPickerDay === day}
+                  onClick={() => setColorPickerDay((current) => (current === day ? null : day))}
+                >
+                  <span style={{ background: dayColorOf(day, dayColorIndexes) }} />
+                </button>
+                {colorPickerDay === day && (
+                  <div className="result-color-palette" role="listbox" aria-label={`${day}일차 색상`}>
+                    {dayColors.map((color, index) => (
+                      <button
+                        key={color}
+                        type="button"
+                        role="option"
+                        aria-selected={dayColorOf(day, dayColorIndexes) === color}
+                        className={dayColorOf(day, dayColorIndexes) === color ? 'is-selected' : undefined}
+                        style={{ background: color }}
+                        onClick={() => chooseDayColor(day, index)}
+                      >
+                        <span className="sr-only">{dayColorNameOf(day, { [day]: index })}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
+            <button
+              type="button"
+              className="result-legend-pick"
+              disabled={legendDays.length === 0}
+              onClick={() => setColorPickerDay(legendDays[0] ?? null)}
+            >
+              색상 선택
+            </button>
           </div>
         </section>
         <aside className="result-schedule">
@@ -457,7 +535,7 @@ function ResultPage() {
           ) : (
             scheduleDays.map((day) => {
               const visits = day.stops.filter((stop) => stop.kind !== 'lodging')
-              const color = dayColors[(day.day - 1) % dayColors.length]
+              const color = dayColorOf(day.day, dayColorIndexes)
               let visitNumber = 0
 
               return (

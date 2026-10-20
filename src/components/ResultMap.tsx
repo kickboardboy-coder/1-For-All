@@ -71,6 +71,18 @@ export type DayRoute = {
   stops: RouteStop[]
 }
 
+export function dayColorIndex(day: number, indexes: Record<number, number> = {}) {
+  return indexes[day] ?? (day - 1) % dayColors.length
+}
+
+export function dayColorOf(day: number, indexes: Record<number, number> = {}) {
+  return dayColors[dayColorIndex(day, indexes)]
+}
+
+export function dayColorNameOf(day: number, indexes: Record<number, number> = {}) {
+  return dayColorNames[dayColorIndex(day, indexes)]
+}
+
 export function dayRoutesFrom(
   itinerary: Itinerary | null,
   places: Place[],
