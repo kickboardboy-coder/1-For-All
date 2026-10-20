@@ -14,6 +14,8 @@ export type PlaceSearchResult = {
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null
+  iconUrl: string | null
+  iconBackgroundColor: string | null
 }
 
 type PlaceSearchRequest = {
@@ -32,13 +34,28 @@ type PlaceSearchRunnerProps = {
 
 type SearchedPlace = {
   id?: string
-  displayName?: string | null
+  displayName?: string | { text?: string } | null
   formattedAddress?: string | null
-  location?: { lat: () => number; lng: () => number } | null
+  location?: { lat: number | (() => number); lng: number | (() => number) } | null
   rating?: number | null
   primaryType?: string | null
   types?: string[] | null
   regularOpeningHours?: { periods?: OpeningPeriod[] } | null
+  svgIconMaskURI?: string | null
+  iconMaskBaseUri?: string | null
+  iconBackgroundColor?: string | null
+}
+
+function locationValue(value: number | (() => number)) {
+  return typeof value === 'function' ? value() : value
+}
+
+function displayNameOf(value: SearchedPlace['displayName']) {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return value?.text ?? null
 }
 
 const shownResultCount = 5
@@ -52,13 +69,15 @@ function topRated(found: SearchedPlace[]) {
     })
     .slice(0, shownResultCount)
     .flatMap(({ place }) => {
-      const result = toResult(place)
+      const result = toPlaceSearchResult(place)
       return result ? [result] : []
     })
 }
 
-function toResult(place: SearchedPlace): PlaceSearchResult | null {
-  if (!place.id || !place.displayName || !place.location) {
+export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | null {
+  const name = displayNameOf(place.displayName)
+
+  if (!place.id || !name || !place.location) {
     return null
   }
 
@@ -66,14 +85,16 @@ function toResult(place: SearchedPlace): PlaceSearchResult | null {
 
   return {
     id: place.id,
-    name: place.displayName,
+    name,
     address: place.formattedAddress ?? null,
-    latitude: place.location.lat(),
-    longitude: place.location.lng(),
+    latitude: locationValue(place.location.lat),
+    longitude: locationValue(place.location.lng),
     category: categoryFromPlaceTypes(place.primaryType, place.types),
     openingHours: schedule.openingHours,
     closedDays: schedule.closedDays,
     breakTime: schedule.breakTime,
+    iconUrl: place.svgIconMaskURI ?? (place.iconMaskBaseUri ? `${place.iconMaskBaseUri}.svg` : null),
+    iconBackgroundColor: place.iconBackgroundColor ?? null,
   }
 }
 

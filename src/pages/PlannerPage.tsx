@@ -348,6 +348,7 @@ function PlannerPage() {
     }
 
     startSearch(query)
+    destinationMenu.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -955,7 +956,9 @@ function PlannerPage() {
             focus={mapFocus}
             onSelectPlace={(placeId) => {
               setSelectedPlaceId(placeId)
-              setMapFocus('place')
+              if (placeId) {
+                setMapFocus('place')
+              }
             }}
             savedPlaceNames={places.map((place) => place.name)}
             isAddingPlace={isUpdatingPlaces}

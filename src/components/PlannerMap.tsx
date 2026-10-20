@@ -1,7 +1,10 @@
-import { useEffect } from 'react'
-import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
-import type { PlaceSearchResult } from './PlaceSearchRunner'
+import { useEffect, useRef, useState } from 'react'
+import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
+import { toPlaceSearchResult, type PlaceSearchResult } from './PlaceSearchRunner'
 import { useMapsStatus } from './MapsProvider'
+
+const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours']
+const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor']
 
 type PlannerMapProps = {
   latitude: number
@@ -10,7 +13,7 @@ type PlannerMapProps = {
   places: PlaceSearchResult[]
   selectedPlaceId: string | null
   focus: 'results' | 'place'
-  onSelectPlace: (placeId: string) => void
+  onSelectPlace: (placeId: string | null) => void
   savedPlaceNames: string[]
   isAddingPlace: boolean
   onAddPlace: (place: PlaceSearchResult) => void
@@ -22,6 +25,33 @@ function MapCamera({ latitude, longitude, zoom }: Pick<PlannerMapProps, 'latitud
   useEffect(() => {
     map?.moveCamera({ center: { lat: latitude, lng: longitude }, zoom })
   }, [map, latitude, longitude, zoom])
+
+  return null
+}
+
+function MapPlaceClicks({ onPick }: { onPick: (placeId: string, latitude: number | null, longitude: number | null) => void }) {
+  const map = useMap()
+  const onPickRef = useRef(onPick)
+  onPickRef.current = onPick
+
+  useEffect(() => {
+    if (!map) {
+      return
+    }
+
+    const listener = map.addListener('click', (event: { placeId?: string; latLng?: { lat: () => number; lng: () => number }; stop?: () => void }) => {
+      if (!event.placeId) {
+        return
+      }
+
+      event.stop?.()
+      onPickRef.current(event.placeId, event.latLng?.lat() ?? null, event.latLng?.lng() ?? null)
+    })
+
+    return () => {
+      listener.remove()
+    }
+  }, [map])
 
   return null
 }
@@ -90,7 +120,71 @@ function PlannerMap({
   onAddPlace,
 }: PlannerMapProps) {
   const status = useMapsStatus()
-  const selectedPlace = places.find((place) => place.id === selectedPlaceId) ?? null
+  const placesLibrary = useMapsLibrary('places')
+  const [mapPlace, setMapPlace] = useState<PlaceSearchResult | null>(null)
+  const pickSeq = useRef(0)
+  const selectedPlace = places.find((place) => place.id === selectedPlaceId) ?? mapPlace
+  const selectedIndex = selectedPlace ? places.findIndex((place) => place.id === selectedPlace.id) : -1
+
+  useEffect(() => {
+    if (places.some((place) => place.id === selectedPlaceId)) {
+      setMapPlace(null)
+    }
+  }, [places, selectedPlaceId])
+
+  async function pickMapPlace(placeId: string, latitude: number | null, longitude: number | null) {
+    const seq = ++pickSeq.current
+    const searched = places.find((place) => place.id === placeId)
+
+    if (searched) {
+      setMapPlace(null)
+      onSelectPlace(searched.id)
+      return
+    }
+
+    setMapPlace(null)
+    onSelectPlace(null)
+
+    if (!placesLibrary) {
+      return
+    }
+
+    try {
+      const place = new placesLibrary.Place({ id: placeId })
+      await place.fetchFields({ fields: mapPlaceFields })
+
+      try {
+        await place.fetchFields({ fields: mapPlaceIconFields })
+      } catch {
+        // 아이콘 필드는 없어도 이름만 있으면 카드를 연다.
+      }
+
+      if (seq !== pickSeq.current) {
+        return
+      }
+
+      const result = toPlaceSearchResult({
+        id: place.id || placeId,
+        displayName: place.displayName,
+        formattedAddress: place.formattedAddress,
+        location: place.location ?? (latitude !== null && longitude !== null ? { lat: latitude, lng: longitude } : null),
+        primaryType: place.primaryType,
+        types: place.types,
+        regularOpeningHours: place.regularOpeningHours,
+        svgIconMaskURI: place.svgIconMaskURI,
+        iconBackgroundColor: place.iconBackgroundColor,
+      })
+
+      if (!result) {
+        return
+      }
+
+      setMapPlace(result)
+      onSelectPlace(result.id)
+    } catch {
+      // 이름·위치를 못 받으면 빈 카드는 열지 않는다.
+    }
+  }
 
   if (status !== 'ready') {
     return (
@@ -112,13 +206,26 @@ function PlannerMap({
         defaultZoom={zoom}
         gestureHandling="greedy"
         colorScheme="LIGHT"
+        clickableIcons
       >
         <MapCamera latitude={latitude} longitude={longitude} zoom={zoom} />
+        <MapPlaceClicks onPick={(placeId, latitude, longitude) => void pickMapPlace(placeId, latitude, longitude)} />
         <MapPlaces places={places} selectedPlaceId={selectedPlaceId} focus={focus} onSelectPlace={onSelectPlace} />
       </Map>
       {selectedPlace && (
         <article className="planner-place-card">
-          <span>{places.findIndex((place) => place.id === selectedPlace.id) + 1}</span>
+          {selectedIndex >= 0 ? (
+            <span>{selectedIndex + 1}</span>
+          ) : selectedPlace.iconUrl ? (
+            <span
+              className="planner-place-google-icon"
+              style={{ background: selectedPlace.iconBackgroundColor ?? '#27846e' }}
+            >
+              <img src={selectedPlace.iconUrl} alt="" />
+            </span>
+          ) : (
+            <span>·</span>
+          )}
           <div>
             <strong>{selectedPlace.name}</strong>
             {selectedPlace.address && <p>{selectedPlace.address}</p>}

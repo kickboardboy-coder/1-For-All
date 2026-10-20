@@ -62,6 +62,7 @@ export type RouteStop = {
   name: string
   latitude: number
   longitude: number
+  label: string
 }
 
 export type DayRoute = {
@@ -70,24 +71,32 @@ export type DayRoute = {
   stops: RouteStop[]
 }
 
-export function dayRoutesFrom(itinerary: Itinerary | null, places: Place[], lodging: RouteStop | null): DayRoute[] {
+export function dayRoutesFrom(
+  itinerary: Itinerary | null,
+  places: Place[],
+  lodging: Omit<RouteStop, 'label'> | null,
+): DayRoute[] {
   if (!itinerary) {
     return []
   }
 
   return itinerary.days.flatMap((day) => {
+    let visitNumber = 0
     const stops = day.stops.flatMap((stop) => {
       const place = places.find((item) => item.id === stop.placeId)
+      const located =
+        place
+          ? { placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }
+          : lodging && stop.placeId === lodging.placeId
+            ? lodging
+            : null
 
-      if (place) {
-        return [{ placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }]
+      if (!located) {
+        return []
       }
 
-      if (lodging && stop.placeId === lodging.placeId) {
-        return [lodging]
-      }
-
-      return []
+      const label = stop.kind === 'lodging' ? '숙소' : String(++visitNumber)
+      return [{ ...located, label }]
     })
 
     if (stops.length === 0) {
@@ -183,22 +192,24 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
         zoomControl
       >
         <RouteLines routes={routes} />
-        {routes.flatMap((route) =>
-          route.stops.map((stop, index) => (
+        {routes.flatMap((route) => {
+          const markers = route.stops.filter((stop, index) => stop.label !== '숙소' || route.stops.findIndex((item) => item.label === '숙소' && item.placeId === stop.placeId) === index)
+
+          return markers.map((stop, index) => (
             <Marker
-              key={`${route.day}-${stop.placeId}-${index}`}
+              key={`${route.day}-${stop.placeId}-${stop.label}-${index}`}
               position={{ lat: stop.latitude, lng: stop.longitude }}
-              title={`${route.day}일차 · ${index + 1}번째 ${stop.name}`}
+              title={`${route.day}일차 · ${stop.label} ${stop.name}`}
               label={{
-                text: `${route.day}-${index + 1}`,
+                text: stop.label,
                 color: '#ffffff',
-                fontSize: '11px',
+                fontSize: stop.label === '숙소' ? '10px' : '12px',
                 fontWeight: '700',
               }}
               zIndex={route.day * 10 + index}
             />
-          )),
-        )}
+          ))
+        })}
       </Map>
       <p>동선은 방문 순서를 이은 선이에요. 실제 길찾기 경로가 아니에요.</p>
     </div>
