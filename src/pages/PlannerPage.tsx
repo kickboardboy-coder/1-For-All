@@ -15,16 +15,17 @@ import plannerPlus from '../assets/planner-plus.svg'
 import plannerSearch from '../assets/planner-search.svg'
 import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
-import { getPlan, savePlan, touchPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, type PlanLodging, type PlanMeals } from '../api/plans'
+import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
-import PlaceSearchRunner, { type PlaceSearchResult } from '../components/PlaceSearchRunner'
+import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
+import { placeRole } from '../utils/placeCategory'
 
 const searchDebounceMs = 400
 const defaultDayStart = '09:00'
@@ -39,6 +40,90 @@ const mealChoices = [
   { key: 'includeLunch', label: '점심' },
   { key: 'includeDinner', label: '저녁' },
 ] as const satisfies ReadonlyArray<{ key: keyof PlanMeals; label: string }>
+const emptyTransitForm = { transport: null, placeId: '', time: '' } as const
+
+type TransitForm = {
+  transport: TransitMode | null
+  placeId: string
+  time: string
+}
+
+function transitPlacePrompt(mode: TransitMode | null, gate: 'arrival' | 'departure') {
+  if (!mode) {
+    return '먼저 이동 수단을 선택해 주세요'
+  }
+
+  if (mode === 'flight') {
+    return gate === 'arrival' ? '도착 공항을 선택해 주세요' : '출발 공항을 선택해 주세요'
+  }
+
+  if (mode === 'train') {
+    return gate === 'arrival' ? '도착 기차역을 선택해 주세요' : '출발 기차역을 선택해 주세요'
+  }
+
+  return gate === 'arrival' ? '일정 시작 장소를 선택해 주세요' : '복귀 출발 장소를 선택해 주세요'
+}
+
+function hubTypeOf(mode: TransitMode | null): PlaceSearchType | null {
+  if (mode === 'flight') {
+    return 'airport'
+  }
+
+  if (mode === 'train') {
+    return 'train_station'
+  }
+
+  return null
+}
+
+function completeTransit(form: TransitForm, pocket: Place[], saved: PlanTransit | null): PlanTransit | null {
+  if (!form.transport || !form.placeId || !form.time) {
+    return null
+  }
+
+  const place = pocket.find((item) => item.id === form.placeId)
+
+  if (place) {
+    return {
+      transport: form.transport,
+      placeId: place.id,
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      time: form.time,
+    }
+  }
+
+  if (saved && saved.placeId === form.placeId) {
+    return { ...saved, transport: form.transport, time: form.time }
+  }
+
+  return null
+}
+
+function asMapPlace(place: Place): PlaceSearchResult {
+  return {
+    id: place.id,
+    name: place.name,
+    address: null,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    category: placeRole(place),
+    openingHours: place.openingHours,
+    closedDays: place.closedDays,
+    breakTime: place.breakTime,
+    iconUrl: null,
+    iconBackgroundColor: null,
+  }
+}
+
+function formFromTransit(transit: PlanTransit | null): TransitForm {
+  if (!transit) {
+    return { ...emptyTransitForm }
+  }
+
+  return { transport: transit.transport, placeId: transit.placeId, time: transit.time }
+}
 const dayTimeOptions = Array.from({ length: 48 }, (_, index) => {
   const hour = Math.floor(index / 2)
   const minute = index % 2 === 0 ? '00' : '30'
@@ -62,6 +147,16 @@ function timeChoices(value: string) {
   return dayTimeOptions.includes(value) ? dayTimeOptions : [...dayTimeOptions, value].sort()
 }
 
+function openDatePicker(input: HTMLInputElement) {
+  const picker = input as HTMLInputElement & { showPicker?: () => void }
+
+  try {
+    picker.showPicker?.()
+  } catch {
+    input.focus()
+  }
+}
+
 const steps = [
   { number: 1, label: '나라 선택' },
   { number: 2, label: '여행 주머니에 담기' },
@@ -75,7 +170,7 @@ function PlannerPage() {
   const [error, setError] = useState('')
   const [country, setCountry] = useState('')
   const [region, setRegion] = useState('')
-  const [openMenu, setOpenMenu] = useState<'country' | 'region' | 'dayStart' | 'dayEnd' | null>(null)
+  const [openMenu, setOpenMenu] = useState<'country' | 'region' | 'dayStart' | 'dayEnd' | 'arrivalTime' | 'departureTime' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [places, setPlaces] = useState<Place[]>([])
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(Boolean(planId))
@@ -85,6 +180,10 @@ function PlannerPage() {
   const [nights, setNights] = useState<number | null>(null)
   const [startDate, setStartDate] = useState<string | null>(null)
   const [lodging, setLodging] = useState<PlanLodging | null>(null)
+  const [arrivalForm, setArrivalForm] = useState<TransitForm>({ ...emptyTransitForm })
+  const [departureForm, setDepartureForm] = useState<TransitForm>({ ...emptyTransitForm })
+  const [savedArrival, setSavedArrival] = useState<PlanTransit | null>(null)
+  const [savedDeparture, setSavedDeparture] = useState<PlanTransit | null>(null)
   const [dayStart, setDayStart] = useState(defaultDayStart)
   const [dayEnd, setDayEnd] = useState(defaultDayEnd)
   const [meals, setMeals] = useState<PlanMeals>(defaultMeals)
@@ -95,7 +194,10 @@ function PlannerPage() {
   const [currentStep, setCurrentStep] = useState<1 | 2>(planId ? 2 : 1)
   const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null)
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([])
+  const [hubRequest, setHubRequest] = useState<{ id: number; query: string; includedType: PlaceSearchType } | null>(null)
+  const [hubLists, setHubLists] = useState<Partial<Record<PlaceSearchType, PlaceSearchResult[]>>>({})
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+  const [pinnedPlace, setPinnedPlace] = useState<PlaceSearchResult | null>(null)
   const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
   const [emptySearchQuery, setEmptySearchQuery] = useState<string | null>(null)
@@ -103,6 +205,7 @@ function PlannerPage() {
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
   const dayHoursMenu = useRef<HTMLDivElement>(null)
+  const transitMenu = useRef<HTMLDivElement>(null)
   const dayHoursTouched = useRef(false)
   const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
@@ -112,12 +215,22 @@ function PlannerPage() {
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
   const stayPlaces = places.filter((place) => place.category === 'stay')
+  const arrival = completeTransit(arrivalForm, places, savedArrival)
+  const departure = completeTransit(departureForm, places, savedDeparture)
+  const arrivalHubType = hubTypeOf(arrivalForm.transport)
+  const departureHubType = hubTypeOf(departureForm.transport)
+  const arrivalHubs = arrivalHubType ? hubLists[arrivalHubType] : null
+  const departureHubs = departureHubType ? hubLists[departureHubType] : null
   const dayHoursInvalid = Boolean(dayStart && dayEnd && dayStart >= dayEnd)
+  const sameDayTransitInvalid = Boolean(days === 1 && arrival && departure && arrival.time >= departure.time)
   const missingRequirements = [
     !planId ? '저장된 계획' : null,
     nights === null ? '여행 기간' : null,
     !startDate ? '출발일' : null,
     !lodging ? '숙소' : null,
+    !arrival ? '첫날 도착' : null,
+    !departure ? '마지막날 복귀' : null,
+    sameDayTransitInvalid ? '도착·복귀 시각' : null,
     !(dayStart && dayEnd && dayStart < dayEnd) ? '활동 시간' : null,
     places.length === 0 ? '담은 장소' : null,
   ].filter((item): item is string => Boolean(item))
@@ -144,10 +257,6 @@ function PlannerPage() {
         }
 
         setPlan(nextPlan)
-        if (nextPlan.status === 'optimized') {
-          navigate(`/result/${nextPlan.id}`, { replace: true })
-          return
-        }
         setCountry(nextPlan.country ?? '')
         setRegion(nextPlan.region)
         setNights(nextPlan.nights)
@@ -162,6 +271,12 @@ function PlannerPage() {
               }
             : null,
         )
+        const nextArrival = transitFromPlan(nextPlan, 'arrival')
+        const nextDeparture = transitFromPlan(nextPlan, 'departure')
+        setSavedArrival(nextArrival)
+        setSavedDeparture(nextDeparture)
+        setArrivalForm(formFromTransit(nextArrival))
+        setDepartureForm(formFromTransit(nextDeparture))
         if (!mealsTouched.current) {
           const nextMeals = {
             includeBreakfast: nextPlan.includeBreakfast ?? defaultMeals.includeBreakfast,
@@ -249,7 +364,7 @@ function PlannerPage() {
 
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Node
-      if (destinationMenu.current?.contains(target) || dayHoursMenu.current?.contains(target)) {
+      if (destinationMenu.current?.contains(target) || dayHoursMenu.current?.contains(target) || transitMenu.current?.contains(target)) {
         return
       }
       setOpenMenu(null)
@@ -271,12 +386,37 @@ function PlannerPage() {
   }, [openMenu])
 
   useEffect(() => {
-    if (openMenu !== 'dayStart' && openMenu !== 'dayEnd') {
+    if (openMenu !== 'dayStart' && openMenu !== 'dayEnd' && openMenu !== 'arrivalTime' && openMenu !== 'departureTime') {
       return
     }
 
-    dayHoursMenu.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+    const menuRoot = openMenu === 'dayStart' || openMenu === 'dayEnd' ? dayHoursMenu.current : transitMenu.current
+    menuRoot?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [openMenu])
+
+  useEffect(() => {
+    setHubLists({})
+    setHubRequest(null)
+  }, [activeCountry, activeRegion])
+
+  useEffect(() => {
+    if (!activeRegion) {
+      return
+    }
+
+    const needed = [arrivalHubType, departureHubType].filter((type): type is PlaceSearchType => Boolean(type))
+    const missing = needed.find((type) => hubLists[type] === undefined)
+
+    if (!missing) {
+      return
+    }
+
+    setHubRequest({
+      id: Date.now(),
+      query: missing === 'airport' ? '공항' : '기차역',
+      includedType: missing,
+    })
+  }, [activeRegion, arrivalHubType, departureHubType, hubLists])
 
   const canSearch = Boolean(planId || region)
 
@@ -429,9 +569,11 @@ function PlannerPage() {
     }
   }
 
-  async function handleAddToPocket(result: PlaceSearchResult) {
-    if (places.some((place) => place.name === result.name)) {
-      return
+  async function addResultToPocket(result: PlaceSearchResult) {
+    const existing = places.find((place) => place.name === result.name)
+
+    if (existing) {
+      return existing
     }
 
     setIsUpdatingPlaces(true)
@@ -443,7 +585,7 @@ function PlannerPage() {
       if (!nextPlanId) {
         if (!country || !region) {
           setError('나라와 지역을 선택해 주세요.')
-          return
+          return null
         }
 
         const nextPlan = await savePlan({
@@ -461,7 +603,7 @@ function PlannerPage() {
 
       const place = await addPlace(nextPlanId, {
         name: result.name,
-        category: result.category,
+        category: placeRole(result),
         latitude: result.latitude,
         longitude: result.longitude,
         openingHours: result.openingHours,
@@ -471,10 +613,11 @@ function PlannerPage() {
 
       if (planId) {
         setPlaces((current) => [...current, place].sort((left, right) => left.name.localeCompare(right.name, 'ko')))
-        return
+        return place
       }
 
       navigate(`/planner/${nextPlanId}`, { replace: true })
+      return place
     } catch (error) {
       console.error(error)
       const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : ''
@@ -486,9 +629,14 @@ function PlannerPage() {
       if (!planId && nextPlanId) {
         navigate(`/planner/${nextPlanId}`, { replace: true })
       }
+      return null
     } finally {
       setIsUpdatingPlaces(false)
     }
+  }
+
+  async function handleAddToPocket(result: PlaceSearchResult) {
+    await addResultToPocket(result)
   }
 
   async function handleDeletePlace(placeId: string) {
@@ -503,6 +651,11 @@ function PlannerPage() {
       await deletePlace(planId, placeId)
       const nextPlaces = places.filter((place) => place.id !== placeId)
       setPlaces(nextPlaces)
+
+      if (pinnedPlace?.id === placeId) {
+        setPinnedPlace(null)
+        setSelectedPlaceId((current) => (current === placeId ? null : current))
+      }
 
       if (lodging?.lodgingPlaceId === placeId) {
         const updatedAt = await updatePlanLodging(planId, null)
@@ -538,6 +691,7 @@ function PlannerPage() {
     try {
       await clearPlaces(planId)
       setPlaces([])
+      setPinnedPlace(null)
 
       if (lodging) {
         const updatedAt = await updatePlanLodging(planId, null)
@@ -563,7 +717,7 @@ function PlannerPage() {
   }
 
   async function handleOptimize() {
-    if (!canOptimize || !planId || nights === null || !startDate || !lodging || !(dayStart && dayEnd && dayStart < dayEnd)) {
+    if (!canOptimize || !planId || nights === null || !startDate || !lodging || !arrival || !departure || !(dayStart && dayEnd && dayStart < dayEnd)) {
       return
     }
 
@@ -582,6 +736,8 @@ function PlannerPage() {
         dayEnd,
         meals,
         lodging,
+        arrival,
+        departure,
         places,
       })
       const updatedAt = await saveItinerary(nextItinerary)
@@ -709,6 +865,103 @@ function PlannerPage() {
       lodgingLatitude: place.latitude,
       lodgingLongitude: place.longitude,
     })
+  }
+
+  async function persistTransit(gate: 'arrival' | 'departure', form: TransitForm, pocket = places) {
+    const next = completeTransit(form, pocket, gate === 'arrival' ? savedArrival : savedDeparture)
+
+    if (!next || !planId) {
+      return
+    }
+
+    setIsSavingSchedule(true)
+    setError('')
+
+    try {
+      const updatedAt = await updatePlanTransit(planId, gate, next)
+
+      if (gate === 'arrival') {
+        setSavedArrival(next)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                arrivalTransport: next.transport,
+                arrivalPlaceId: next.placeId,
+                arrivalPlaceName: next.name,
+                arrivalLatitude: next.latitude,
+                arrivalLongitude: next.longitude,
+                arrivalTime: next.time,
+                updatedAt,
+              }
+            : current,
+        )
+        return
+      }
+
+      setSavedDeparture(next)
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              departureTransport: next.transport,
+              departurePlaceId: next.placeId,
+              departurePlaceName: next.name,
+              departureLatitude: next.latitude,
+              departureLongitude: next.longitude,
+              departureTime: next.time,
+              updatedAt,
+            }
+          : current,
+      )
+    } catch {
+      setError(gate === 'arrival' ? '첫날 도착 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' : '복귀 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  function changeArrival(patch: Partial<TransitForm>) {
+    const nextForm = { ...arrivalForm, ...patch }
+    setArrivalForm(nextForm)
+    void persistTransit('arrival', nextForm)
+  }
+
+  function changeDeparture(patch: Partial<TransitForm>) {
+    const nextForm = { ...departureForm, ...patch }
+    setDepartureForm(nextForm)
+    void persistTransit('departure', nextForm)
+  }
+
+  function hubSelectValue(form: TransitForm, hubs: PlaceSearchResult[], saved: PlanTransit | null) {
+    const selected = places.find((place) => place.id === form.placeId)
+    const name = selected?.name ?? (saved?.placeId === form.placeId ? saved.name : null)
+
+    if (!name) {
+      return ''
+    }
+
+    return hubs.find((hub) => hub.name === name)?.id ?? ''
+  }
+
+  async function chooseTransitHub(gate: 'arrival' | 'departure', result: PlaceSearchResult) {
+    const place = await addResultToPocket(result)
+
+    if (!place) {
+      return
+    }
+
+    const pocket = places.some((item) => item.id === place.id) ? places : [...places, place]
+    const nextForm = { ...(gate === 'arrival' ? arrivalForm : departureForm), placeId: place.id }
+
+    if (gate === 'arrival') {
+      setArrivalForm(nextForm)
+      void persistTransit('arrival', nextForm, pocket)
+      return
+    }
+
+    setDepartureForm(nextForm)
+    void persistTransit('departure', nextForm, pocket)
   }
 
   async function persistDayHours(nextStart: string | null, nextEnd: string | null) {
@@ -945,6 +1198,27 @@ function PlannerPage() {
                 setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')
               }}
             />
+            <PlaceSearchRunner
+              request={hubRequest}
+              latitude={mapRegion?.latitude ?? null}
+              longitude={mapRegion?.longitude ?? null}
+              regionName={mapRegion?.name ?? (activeRegion || null)}
+              onSuccess={(query, results) => {
+                if (!hubRequest || query !== hubRequest.query) {
+                  return
+                }
+
+                setHubLists((current) => ({ ...current, [hubRequest.includedType]: results }))
+              }}
+              onError={(query) => {
+                if (!hubRequest || query !== hubRequest.query) {
+                  return
+                }
+
+                setHubLists((current) => ({ ...current, [hubRequest.includedType]: [] }))
+                setError('공항·기차역을 찾지 못했습니다. 잠시 후 다시 시도해 주세요.')
+              }}
+            />
             </WhenMapsReady>
           )}
           <PlannerMap
@@ -952,10 +1226,14 @@ function PlannerPage() {
             longitude={mapRegion?.longitude ?? 0}
             zoom={mapRegion ? 12 : 2}
             places={searchResults}
+            pinnedPlace={pinnedPlace}
             selectedPlaceId={selectedPlaceId}
             focus={mapFocus}
             onSelectPlace={(placeId) => {
               setSelectedPlaceId(placeId)
+              if (placeId && pinnedPlace && placeId !== pinnedPlace.id) {
+                setPinnedPlace(null)
+              }
               if (placeId) {
                 setMapFocus('place')
               }
@@ -1020,17 +1298,27 @@ function PlannerPage() {
             <ul className="planner-places">
               {places.map((place, index) => (
                 <li key={place.id}>
-                  <div className="planner-place-thumb" aria-hidden="true">
-                    <span>{index + 1}</span>
-                  </div>
-                  <div className="planner-place-copy">
-                    <strong>{place.name}</strong>
-                    <p>
-                      {placeCategoryLabel[place.category]}
-                      {activeRegion ? ` · ${activeRegion}` : ''}
-                    </p>
-                    <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
-                  </div>
+                  <button
+                    type="button"
+                    className={place.id === pinnedPlace?.id ? 'planner-place-item is-selected' : 'planner-place-item'}
+                    onClick={() => {
+                      setPinnedPlace(asMapPlace(place))
+                      setSelectedPlaceId(place.id)
+                      setMapFocus('place')
+                    }}
+                  >
+                    <div className="planner-place-thumb" aria-hidden="true">
+                      <span>{index + 1}</span>
+                    </div>
+                    <div className="planner-place-copy">
+                      <strong>{place.name}</strong>
+                      <p>
+                        {placeCategoryLabel[placeRole(place)]}
+                        {activeRegion ? ` · ${activeRegion}` : ''}
+                      </p>
+                      <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
+                    </div>
+                  </button>
                   <button
                     type="button"
                     disabled={isUpdatingPlaces}
@@ -1079,6 +1367,7 @@ function PlannerPage() {
                 aria-label="출발일"
                 value={startDate ?? ''}
                 disabled={isSavingSchedule}
+                onClick={(event) => openDatePicker(event.currentTarget)}
                 onChange={(event) => changeStartDate(event.target.value)}
               />
             </label>
@@ -1102,6 +1391,217 @@ function PlannerPage() {
               </select>
               <img src={plannerChevronDown} alt="" />
             </label>
+            <div className="planner-transit" ref={transitMenu}>
+              <div className="planner-transit-block">
+                <span>첫날 도착</span>
+                <div className="planner-meals">
+                  {transitModes.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={arrivalForm.transport === mode}
+                      disabled={isSavingSchedule}
+                      onClick={() => changeArrival({ transport: mode, placeId: mode === arrivalForm.transport ? arrivalForm.placeId : '' })}
+                    >
+                      {transitModeLabel[mode]}
+                    </button>
+                  ))}
+                </div>
+                <label className="planner-lodging">
+                  <img src={plannerPin} alt="" />
+                  <select
+                    aria-label="도착 장소"
+                    value={arrivalHubs ? hubSelectValue(arrivalForm, arrivalHubs, savedArrival) : arrivalForm.placeId}
+                    disabled={
+                      isSavingSchedule ||
+                      isUpdatingPlaces ||
+                      !arrivalForm.transport ||
+                      (arrivalHubType ? arrivalHubs === undefined : places.length === 0)
+                    }
+                    onChange={(event) => {
+                      if (arrivalHubs) {
+                        const result = arrivalHubs.find((hub) => hub.id === event.target.value)
+                        if (result) {
+                          void chooseTransitHub('arrival', result)
+                        }
+                        return
+                      }
+
+                      changeArrival({ placeId: event.target.value })
+                    }}
+                  >
+                    <option value="">
+                      {arrivalHubType && arrivalHubs === undefined
+                        ? arrivalHubType === 'airport'
+                          ? '공항을 찾는 중'
+                          : '기차역을 찾는 중'
+                        : arrivalHubType && arrivalHubs?.length === 0
+                          ? arrivalHubType === 'airport'
+                            ? '이 지역에서 공항을 찾지 못했습니다'
+                            : '이 지역에서 기차역을 찾지 못했습니다'
+                          : !arrivalHubType && places.length === 0
+                            ? '장소를 먼저 담아 주세요'
+                            : transitPlacePrompt(arrivalForm.transport, 'arrival')}
+                    </option>
+                    {arrivalHubs
+                      ? arrivalHubs.map((hub) => (
+                          <option key={hub.id} value={hub.id}>
+                            {hub.name}
+                          </option>
+                        ))
+                      : [
+                          savedArrival && !places.some((place) => place.id === savedArrival.placeId) ? (
+                            <option key={savedArrival.placeId} value={savedArrival.placeId}>
+                              {savedArrival.name}
+                            </option>
+                          ) : null,
+                          ...places.map((place) => (
+                            <option key={place.id} value={place.id}>
+                              {place.name}
+                            </option>
+                          )),
+                        ]}
+                  </select>
+                  <img src={plannerChevronDown} alt="" />
+                </label>
+                <div className={openMenu === 'arrivalTime' ? 'planner-time is-open' : 'planner-time'}>
+                  <button
+                    type="button"
+                    aria-label="도착 시각"
+                    aria-haspopup="listbox"
+                    aria-expanded={openMenu === 'arrivalTime'}
+                    disabled={isSavingSchedule || !arrivalForm.transport}
+                    onClick={() => setOpenMenu((current) => (current === 'arrivalTime' ? null : 'arrivalTime'))}
+                  >
+                    {arrivalForm.time ? formatKoreanTime(arrivalForm.time) : '도착 시각'}
+                  </button>
+                  {openMenu === 'arrivalTime' && (
+                    <ul className="planner-time-menu" role="listbox" aria-label="도착 시각">
+                      {timeChoices(arrivalForm.time || '10:00').map((time) => (
+                        <li key={time}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={time === arrivalForm.time}
+                            onClick={() => {
+                              changeArrival({ time })
+                              setOpenMenu(null)
+                            }}
+                          >
+                            {formatKoreanTime(time)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              <div className="planner-transit-block">
+                <span>마지막날 복귀</span>
+                <div className="planner-meals">
+                  {transitModes.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={departureForm.transport === mode}
+                      disabled={isSavingSchedule}
+                      onClick={() => changeDeparture({ transport: mode, placeId: mode === departureForm.transport ? departureForm.placeId : '' })}
+                    >
+                      {transitModeLabel[mode]}
+                    </button>
+                  ))}
+                </div>
+                <label className="planner-lodging">
+                  <img src={plannerPin} alt="" />
+                  <select
+                    aria-label="복귀 장소"
+                    value={departureHubs ? hubSelectValue(departureForm, departureHubs, savedDeparture) : departureForm.placeId}
+                    disabled={
+                      isSavingSchedule ||
+                      isUpdatingPlaces ||
+                      !departureForm.transport ||
+                      (departureHubType ? departureHubs === undefined : places.length === 0)
+                    }
+                    onChange={(event) => {
+                      if (departureHubs) {
+                        const result = departureHubs.find((hub) => hub.id === event.target.value)
+                        if (result) {
+                          void chooseTransitHub('departure', result)
+                        }
+                        return
+                      }
+
+                      changeDeparture({ placeId: event.target.value })
+                    }}
+                  >
+                    <option value="">
+                      {departureHubType && departureHubs === undefined
+                        ? departureHubType === 'airport'
+                          ? '공항을 찾는 중'
+                          : '기차역을 찾는 중'
+                        : departureHubType && departureHubs?.length === 0
+                          ? departureHubType === 'airport'
+                            ? '이 지역에서 공항을 찾지 못했습니다'
+                            : '이 지역에서 기차역을 찾지 못했습니다'
+                          : !departureHubType && places.length === 0
+                            ? '장소를 먼저 담아 주세요'
+                            : transitPlacePrompt(departureForm.transport, 'departure')}
+                    </option>
+                    {departureHubs
+                      ? departureHubs.map((hub) => (
+                          <option key={hub.id} value={hub.id}>
+                            {hub.name}
+                          </option>
+                        ))
+                      : [
+                          savedDeparture && !places.some((place) => place.id === savedDeparture.placeId) ? (
+                            <option key={savedDeparture.placeId} value={savedDeparture.placeId}>
+                              {savedDeparture.name}
+                            </option>
+                          ) : null,
+                          ...places.map((place) => (
+                            <option key={place.id} value={place.id}>
+                              {place.name}
+                            </option>
+                          )),
+                        ]}
+                  </select>
+                  <img src={plannerChevronDown} alt="" />
+                </label>
+                <div className={openMenu === 'departureTime' ? 'planner-time is-open' : 'planner-time'}>
+                  <button
+                    type="button"
+                    aria-label="복귀 시각"
+                    aria-haspopup="listbox"
+                    aria-expanded={openMenu === 'departureTime'}
+                    disabled={isSavingSchedule || !departureForm.transport}
+                    onClick={() => setOpenMenu((current) => (current === 'departureTime' ? null : 'departureTime'))}
+                  >
+                    {departureForm.time ? formatKoreanTime(departureForm.time) : '출발 시각'}
+                  </button>
+                  {openMenu === 'departureTime' && (
+                    <ul className="planner-time-menu" role="listbox" aria-label="복귀 시각">
+                      {timeChoices(departureForm.time || '18:00').map((time) => (
+                        <li key={time}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={time === departureForm.time}
+                            onClick={() => {
+                              changeDeparture({ time })
+                              setOpenMenu(null)
+                            }}
+                          >
+                            {formatKoreanTime(time)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              {sameDayTransitInvalid && <p className="planner-day-hours-note">당일치기는 도착 시각이 복귀 시각보다 빨라야 해요.</p>}
+            </div>
             <div className="planner-day-hours" ref={dayHoursMenu}>
               <span>활동 시간</span>
               <div className={openMenu === 'dayStart' ? 'planner-time is-open' : 'planner-time'}>

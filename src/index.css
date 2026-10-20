@@ -916,18 +916,39 @@ body {
   line-height: 1.45;
 }
 
-.planner-place-card button {
+.planner-place-card-actions {
+  display: flex;
   flex-shrink: 0;
-  height: 36px;
+  flex-direction: column;
+  gap: 6px;
   margin-left: auto;
+}
+
+.planner-place-card-actions a,
+.planner-place-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
   padding: 0 12px;
-  border: 0;
   border-radius: 12px;
-  background: #27846e;
-  color: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.planner-place-card-actions a {
+  border: 1px solid #e4ebe7;
+  background: #fff;
+  color: #243d37;
+}
+
+.planner-place-card button {
+  border: 0;
+  background: #27846e;
+  color: #fff;
   cursor: pointer;
 }
 
@@ -1026,7 +1047,7 @@ body {
   gap: 8px;
   max-height: 360px;
   margin: 16px 0 0;
-  padding: 0;
+  padding: 2px;
   overflow: auto;
   list-style: none;
 }
@@ -1040,6 +1061,26 @@ body {
   padding: 12px;
   border-radius: 16px;
   background: #f6f8f7;
+}
+
+.planner-place-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-places li:has(.is-selected) {
+  box-shadow: inset 0 0 0 1px #27846e;
+  background: #e8f4ef;
 }
 
 .planner-place-thumb {
@@ -1100,7 +1141,7 @@ body {
   white-space: normal;
 }
 
-.planner-places button {
+.planner-places li > button:not(.planner-place-item) {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
@@ -1194,8 +1235,24 @@ body {
 
 .planner-date input {
   position: absolute;
+  z-index: 2;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
   opacity: 0;
+  cursor: pointer;
+}
+
+.planner-date input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   cursor: pointer;
 }
 
@@ -1227,6 +1284,40 @@ body {
 .planner-lodging select:disabled {
   color: #7a8983;
   cursor: default;
+}
+
+.planner-transit {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.planner-transit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planner-transit-block > span {
+  color: #7a8983;
+  font-size: 12px;
+}
+
+.planner-transit .planner-meals {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.planner-transit .planner-time {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
 }
 
 .planner-day-hours {
@@ -1889,17 +1980,8 @@ body {
 .result-flow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 24px;
-}
-
-.result-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #62766e;
-  font-size: 12px;
-  text-decoration: none;
 }
 
 .result-title-row {
@@ -1969,6 +2051,8 @@ body {
   font: inherit;
   font-size: 14px;
   font-weight: 700;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .result-edit {
@@ -1981,6 +2065,17 @@ body {
   border: 1px solid #27846e;
   background: #27846e;
   color: #fff;
+}
+
+.result-edit:not(:disabled),
+.result-save:not(:disabled) {
+  cursor: pointer;
+}
+
+.result-edit.is-active {
+  border-color: #27846e;
+  background: #e8f4ef;
+  color: #27846e;
 }
 
 .result-edit:disabled,
@@ -2198,7 +2293,7 @@ body {
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-top: 15px;
+  margin-top: 2px;
   border-radius: 999px;
   background: #27846e;
   color: #fff;
@@ -2226,6 +2321,33 @@ body {
 .result-visit p small {
   color: #7a8983;
   font-weight: 500;
+}
+
+.result-visit-order {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.result-visit-order button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e4ebe7;
+  border-radius: 8px;
+  background: #fff;
+  color: #243d37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.result-visit-order button:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .result-visit strong {

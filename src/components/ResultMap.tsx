@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { useMapsStatus } from './MapsProvider'
-import type { Itinerary } from '../types/itinerary'
+import { itineraryStopBadge, type Itinerary } from '../types/itinerary'
 import type { Place } from '../types/place'
 
 export const dayColors = [
@@ -95,7 +95,7 @@ export function dayRoutesFrom(
         return []
       }
 
-      const label = stop.kind === 'lodging' ? '숙소' : String(++visitNumber)
+      const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)
       return [{ ...located, label }]
     })
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { summarizeOpeningHours, type OpeningPeriod } from '../utils/placeSchedule'
-import { categoryFromPlaceTypes } from '../utils/placeCategory'
+import { categoryFromPlaceTypes, placeRole } from '../utils/placeCategory'
 import type { PlaceCategory } from '../types/place'
 
 export type PlaceSearchResult = {
@@ -18,9 +18,12 @@ export type PlaceSearchResult = {
   iconBackgroundColor: string | null
 }
 
+export type PlaceSearchType = 'airport' | 'train_station'
+
 type PlaceSearchRequest = {
   id: number
   query: string
+  includedType?: PlaceSearchType
 }
 
 type PlaceSearchRunnerProps = {
@@ -59,6 +62,48 @@ function displayNameOf(value: SearchedPlace['displayName']) {
 }
 
 const shownResultCount = 5
+const hubResultCount = 20
+
+function asSearchedPlace(place: SearchedPlace) {
+  return {
+    id: place.id,
+    displayName: place.displayName,
+    formattedAddress: place.formattedAddress,
+    location: place.location,
+    rating: place.rating,
+    primaryType: place.primaryType,
+    types: place.types,
+    regularOpeningHours: place.regularOpeningHours,
+    svgIconMaskURI: place.svgIconMaskURI,
+    iconMaskBaseUri: place.iconMaskBaseUri,
+    iconBackgroundColor: place.iconBackgroundColor,
+  }
+}
+
+function namedResults(found: SearchedPlace[]) {
+  return found
+    .flatMap((place) => {
+      const result = toPlaceSearchResult(asSearchedPlace(place))
+      return result ? [result] : []
+    })
+    .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
+}
+
+function matchesHubType(place: SearchedPlace, includedType: PlaceSearchType) {
+  const types = [place.primaryType, ...(place.types ?? [])].filter(Boolean)
+  const name = displayNameOf(place.displayName) ?? ''
+
+  if (includedType === 'airport') {
+    return types.includes('airport') || types.includes('international_airport') || /공항|airport/i.test(name)
+  }
+
+  return (
+    types.includes('train_station') ||
+    types.includes('transit_station') ||
+    /기차역|철도역|train station/i.test(name) ||
+    (name.endsWith('역') && !name.includes('버스'))
+  )
+}
 
 function topRated(found: SearchedPlace[]) {
   return found
@@ -89,7 +134,7 @@ export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | n
     address: place.formattedAddress ?? null,
     latitude: locationValue(place.location.lat),
     longitude: locationValue(place.location.lng),
-    category: categoryFromPlaceTypes(place.primaryType, place.types),
+    category: placeRole({ name, category: categoryFromPlaceTypes(place.primaryType, place.types) }),
     openingHours: schedule.openingHours,
     closedDays: schedule.closedDays,
     breakTime: schedule.breakTime,
@@ -112,29 +157,53 @@ function PlaceSearchRunner({ request, latitude, longitude, regionName, onSuccess
 
     let ignore = false
     const textQuery = regionName && !request.query.includes(regionName) ? `${regionName} ${request.query}` : request.query
+    const isHubSearch = Boolean(request.includedType)
     const locationBias =
       latitude === null || longitude === null
         ? undefined
-        : { center: { lat: latitude, lng: longitude }, radius: 25000 }
+        : { center: { lat: latitude, lng: longitude }, radius: isHubSearch ? 50000 : 25000 }
+    const requestSearch = (withType: boolean) =>
+      places.Place.searchByText({
+        textQuery,
+        fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'primaryType', 'types', 'regularOpeningHours'],
+        language: 'ko',
+        region: 'KR',
+        maxResultCount: 20,
+        locationBias,
+        ...(withType && request.includedType ? { includedType: request.includedType } : {}),
+      })
 
-    places.Place.searchByText({
-      textQuery,
-      fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'primaryType', 'types', 'regularOpeningHours'],
-      language: 'ko',
-      maxResultCount: 20,
-      locationBias,
-    })
-      .then(({ places: found }: { places: SearchedPlace[] }) => {
-        if (ignore) {
+    const finish = (found: SearchedPlace[]) => {
+      if (ignore) {
+        return
+      }
+
+      if (!isHubSearch) {
+        onSuccessRef.current(request.query, topRated(found))
+        return
+      }
+
+      const typed = found.filter((place) => matchesHubType(place, request.includedType ?? 'airport'))
+      onSuccessRef.current(request.query, namedResults(typed.length > 0 ? typed : found).slice(0, hubResultCount))
+    }
+
+    requestSearch(isHubSearch)
+      .then(({ places: found }: { places: SearchedPlace[] }) => finish(found))
+      .catch(() => {
+        if (!isHubSearch) {
+          if (!ignore) {
+            onErrorRef.current(request.query)
+          }
           return
         }
 
-        onSuccessRef.current(request.query, topRated(found))
-      })
-      .catch(() => {
-        if (!ignore) {
-          onErrorRef.current(request.query)
-        }
+        requestSearch(false)
+          .then(({ places: found }: { places: SearchedPlace[] }) => finish(found))
+          .catch(() => {
+            if (!ignore) {
+              onErrorRef.current(request.query)
+            }
+          })
       })
 
     return () => {

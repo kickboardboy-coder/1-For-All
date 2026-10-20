@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import { toPlaceSearchResult, type PlaceSearchResult } from './PlaceSearchRunner'
 import { useMapsStatus } from './MapsProvider'
+import { formatPlaceSchedule } from '../utils/placeSchedule'
 
 const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours']
 const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor']
@@ -11,6 +12,7 @@ type PlannerMapProps = {
   longitude: number
   zoom: number
   places: PlaceSearchResult[]
+  pinnedPlace?: PlaceSearchResult | null
   selectedPlaceId: string | null
   focus: 'results' | 'place'
   onSelectPlace: (placeId: string | null) => void
@@ -58,21 +60,26 @@ function MapPlaceClicks({ onPick }: { onPick: (placeId: string, latitude: number
 
 function MapPlaces({
   places,
+  pinnedPlace,
   selectedPlaceId,
   focus,
   onSelectPlace,
-}: Pick<PlannerMapProps, 'places' | 'selectedPlaceId' | 'focus' | 'onSelectPlace'>) {
+}: Pick<PlannerMapProps, 'places' | 'pinnedPlace' | 'selectedPlaceId' | 'focus' | 'onSelectPlace'>) {
   const map = useMap()
 
   useEffect(() => {
-    if (!map || places.length === 0) {
+    if (!map) {
       return
     }
 
-    const selected = places.find((place) => place.id === selectedPlaceId)
+    const selected = places.find((place) => place.id === selectedPlaceId) ?? (pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null)
 
     if (focus === 'place' && selected) {
       map.moveCamera({ center: { lat: selected.latitude, lng: selected.longitude }, zoom: 15 })
+      return
+    }
+
+    if (places.length === 0) {
       return
     }
 
@@ -89,7 +96,7 @@ function MapPlaces({
       east: Math.max(...longitudes),
       west: Math.min(...longitudes),
     })
-  }, [map, places, selectedPlaceId, focus])
+  }, [map, places, pinnedPlace, selectedPlaceId, focus])
 
   return (
     <>
@@ -103,6 +110,15 @@ function MapPlaces({
           onClick={() => onSelectPlace(place.id)}
         />
       ))}
+      {pinnedPlace && !places.some((place) => place.id === pinnedPlace.id) && (
+        <Marker
+          key={pinnedPlace.id}
+          position={{ lat: pinnedPlace.latitude, lng: pinnedPlace.longitude }}
+          title={pinnedPlace.name}
+          zIndex={3}
+          onClick={() => onSelectPlace(pinnedPlace.id)}
+        />
+      )}
     </>
   )
 }
@@ -112,6 +128,7 @@ function PlannerMap({
   longitude,
   zoom,
   places,
+  pinnedPlace = null,
   selectedPlaceId,
   focus,
   onSelectPlace,
@@ -122,15 +139,95 @@ function PlannerMap({
   const status = useMapsStatus()
   const placesLibrary = useMapsLibrary('places')
   const [mapPlace, setMapPlace] = useState<PlaceSearchResult | null>(null)
+  const [pinDetails, setPinDetails] = useState<PlaceSearchResult | null>(null)
   const pickSeq = useRef(0)
-  const selectedPlace = places.find((place) => place.id === selectedPlaceId) ?? mapPlace
+  const pinSeq = useRef(0)
+  const selectedFromPin = pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null
+  const selectedPlace =
+    places.find((place) => place.id === selectedPlaceId) ??
+    (selectedFromPin
+      ? {
+          ...selectedFromPin,
+          address: pinDetails?.address ?? selectedFromPin.address,
+          iconUrl: pinDetails?.iconUrl ?? selectedFromPin.iconUrl,
+          iconBackgroundColor: pinDetails?.iconBackgroundColor ?? selectedFromPin.iconBackgroundColor,
+          openingHours: selectedFromPin.openingHours ?? pinDetails?.openingHours ?? null,
+          closedDays: selectedFromPin.closedDays ?? pinDetails?.closedDays ?? null,
+          breakTime: selectedFromPin.breakTime ?? pinDetails?.breakTime ?? null,
+        }
+      : null) ??
+    mapPlace
   const selectedIndex = selectedPlace ? places.findIndex((place) => place.id === selectedPlace.id) : -1
+  const mapsPlaceId = selectedFromPin && pinDetails?.id ? pinDetails.id : selectedPlace?.id
+  const placeSchedule = selectedPlace ? formatPlaceSchedule(selectedPlace) : ''
 
   useEffect(() => {
     if (places.some((place) => place.id === selectedPlaceId)) {
       setMapPlace(null)
     }
   }, [places, selectedPlaceId])
+
+  useEffect(() => {
+    if (!placesLibrary || !pinnedPlace || selectedPlaceId !== pinnedPlace.id) {
+      setPinDetails(null)
+      return
+    }
+
+    let ignore = false
+    const seq = ++pinSeq.current
+
+    void (async () => {
+      try {
+        const { places: found } = await placesLibrary.Place.searchByText({
+          textQuery: pinnedPlace.name,
+          fields: ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours'],
+          language: 'ko',
+          region: 'KR',
+          maxResultCount: 1,
+          locationBias: { center: { lat: pinnedPlace.latitude, lng: pinnedPlace.longitude }, radius: 500 },
+        })
+        const first = found?.[0]
+
+        if (!first || ignore || seq !== pinSeq.current) {
+          return
+        }
+
+        try {
+          await first.fetchFields({ fields: mapPlaceIconFields })
+        } catch {
+          // 아이콘은 없어도 주소·영업시간은 카드에 넣는다.
+        }
+
+        if (ignore || seq !== pinSeq.current) {
+          return
+        }
+
+        const result = toPlaceSearchResult({
+          id: first.id,
+          displayName: first.displayName,
+          formattedAddress: first.formattedAddress,
+          location: first.location ?? { lat: pinnedPlace.latitude, lng: pinnedPlace.longitude },
+          primaryType: first.primaryType,
+          types: first.types,
+          regularOpeningHours: first.regularOpeningHours,
+          svgIconMaskURI: first.svgIconMaskURI,
+          iconBackgroundColor: first.iconBackgroundColor,
+        })
+
+        if (result) {
+          setPinDetails(result)
+        }
+      } catch {
+        if (!ignore && seq === pinSeq.current) {
+          setPinDetails(null)
+        }
+      }
+    })()
+
+    return () => {
+      ignore = true
+    }
+  }, [placesLibrary, pinnedPlace, selectedPlaceId])
 
   async function pickMapPlace(placeId: string, latitude: number | null, longitude: number | null) {
     const seq = ++pickSeq.current
@@ -210,7 +307,13 @@ function PlannerMap({
       >
         <MapCamera latitude={latitude} longitude={longitude} zoom={zoom} />
         <MapPlaceClicks onPick={(placeId, latitude, longitude) => void pickMapPlace(placeId, latitude, longitude)} />
-        <MapPlaces places={places} selectedPlaceId={selectedPlaceId} focus={focus} onSelectPlace={onSelectPlace} />
+        <MapPlaces
+          places={places}
+          pinnedPlace={pinnedPlace}
+          selectedPlaceId={selectedPlaceId}
+          focus={focus}
+          onSelectPlace={onSelectPlace}
+        />
       </Map>
       {selectedPlace && (
         <article className="planner-place-card">
@@ -229,14 +332,24 @@ function PlannerMap({
           <div>
             <strong>{selectedPlace.name}</strong>
             {selectedPlace.address && <p>{selectedPlace.address}</p>}
+            {placeSchedule !== '영업시간 정보 없음' && <p>{placeSchedule}</p>}
           </div>
-          <button
-            type="button"
-            disabled={isAddingPlace || savedPlaceNames.includes(selectedPlace.name)}
-            onClick={() => onAddPlace(selectedPlace)}
-          >
-            {savedPlaceNames.includes(selectedPlace.name) ? '담김' : '주머니에 담기'}
-          </button>
+          <div className="planner-place-card-actions">
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPlace.name)}${mapsPlaceId ? `&query_place_id=${encodeURIComponent(mapsPlaceId)}` : ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              구글에서 보기
+            </a>
+            <button
+              type="button"
+              disabled={isAddingPlace || savedPlaceNames.includes(selectedPlace.name)}
+              onClick={() => onAddPlace(selectedPlace)}
+            >
+              {savedPlaceNames.includes(selectedPlace.name) ? '담김' : '주머니에 담기'}
+            </button>
+          </div>
         </article>
       )}
     </div>

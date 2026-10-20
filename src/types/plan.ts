@@ -23,6 +23,18 @@ export type Plan = {
   includeBreakfast: boolean | null
   includeLunch: boolean | null
   includeDinner: boolean | null
+  arrivalTransport: string | null
+  arrivalPlaceId: string | null
+  arrivalPlaceName: string | null
+  arrivalLatitude: number | null
+  arrivalLongitude: number | null
+  arrivalTime: string | null
+  departureTransport: string | null
+  departurePlaceId: string | null
+  departurePlaceName: string | null
+  departureLatitude: number | null
+  departureLongitude: number | null
+  departureTime: string | null
   status: PlanStatus
   updatedAt: string
 }

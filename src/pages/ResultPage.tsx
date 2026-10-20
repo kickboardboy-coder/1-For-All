@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
-import { getItinerary } from '../api/itinerary'
+import { getItinerary, saveItinerary, travelMinutes } from '../api/itinerary'
 import { getPlan } from '../api/plans'
 import { getPlaces } from '../api/places'
 import MapsProvider from '../components/MapsProvider'
@@ -15,13 +15,61 @@ import resultMap from '../assets/result-map.svg'
 import resultPencil from '../assets/result-pencil.svg'
 import resultTrain from '../assets/result-train.svg'
 import plannerChevron from '../assets/planner-chevron.svg'
-import type { Itinerary, ItineraryStop } from '../types/itinerary'
+import { itineraryStopBadge, type Itinerary, type ItineraryStop } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import type { Place } from '../types/place'
-import { placeCategoryLabel } from '../types/place'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 
 const weekdayLabel = ['일', '월', '화', '수', '목', '금', '토']
+
+function cloneItinerary(itinerary: Itinerary): Itinerary {
+  return {
+    planId: itinerary.planId,
+    days: itinerary.days.map((day) => ({
+      ...day,
+      stops: day.stops.map((stop) => ({ ...stop })),
+    })),
+  }
+}
+
+function stopCoords(
+  stop: ItineraryStop,
+  places: Place[],
+  lodging: { placeId: string; latitude: number; longitude: number } | null,
+) {
+  const place = places.find((item) => item.id === stop.placeId)
+
+  if (place) {
+    return { latitude: place.latitude, longitude: place.longitude }
+  }
+
+  if (lodging && stop.placeId === lodging.placeId) {
+    return { latitude: lodging.latitude, longitude: lodging.longitude }
+  }
+
+  return null
+}
+
+function withTravelTimes(
+  stops: ItineraryStop[],
+  places: Place[],
+  lodging: { placeId: string; latitude: number; longitude: number } | null,
+) {
+  return stops.map((stop, index) => {
+    if (index === 0) {
+      return { ...stop, travelMinutes: null }
+    }
+
+    const from = stopCoords(stops[index - 1], places, lodging)
+    const to = stopCoords(stop, places, lodging)
+
+    if (!from || !to) {
+      return stop
+    }
+
+    return { ...stop, travelMinutes: travelMinutes(from, to) }
+  })
+}
 
 function formatDateRange(startDate: string | null, nights: number | null) {
   if (!startDate || nights === null) {
@@ -65,22 +113,6 @@ function formatTravel(minutes: number | null) {
   return `약 ${rest}분`
 }
 
-function stopKindLabel(stop: ItineraryStop) {
-  if (stop.kind === 'breakfast') {
-    return '아침'
-  }
-
-  if (stop.kind === 'lunch') {
-    return '점심'
-  }
-
-  if (stop.kind === 'dinner') {
-    return '저녁'
-  }
-
-  return placeCategoryLabel[stop.category]
-}
-
 function formatDayDate(value: string) {
   const date = new Date(`${value}T00:00:00`)
 
@@ -99,6 +131,10 @@ function ResultPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [visibleDays, setVisibleDays] = useState<number[]>([])
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState<Itinerary | null>(null)
+  const [isSavingEdits, setIsSavingEdits] = useState(false)
+  const [editError, setEditError] = useState('')
 
   useEffect(() => {
     if (!planId) {
@@ -170,7 +206,8 @@ function ResultPage() {
   const nights = plan.nights ?? 0
   const days = plan.nights === null ? itinerary?.days.length ?? 1 : nights + 1
   const placeCount = places.length
-  const scheduleDays = itinerary?.days ?? []
+  const schedule = isEditing ? draft : itinerary
+  const scheduleDays = schedule?.days ?? []
   const mapRegion = findRegion(plan.country, plan.region)
   const lodging =
     plan.lodgingPlaceId && plan.lodgingName && plan.lodgingLatitude !== null && plan.lodgingLongitude !== null
@@ -181,7 +218,7 @@ function ResultPage() {
           longitude: plan.lodgingLongitude,
         }
       : null
-  const routes = dayRoutesFrom(itinerary, places, lodging).filter((route) => visibleDays.includes(route.day))
+  const routes = dayRoutesFrom(schedule, places, lodging).filter((route) => visibleDays.includes(route.day))
   const legendDays = scheduleDays.length > 0 ? scheduleDays.map((day) => day.day) : Array.from({ length: days }, (_, index) => index + 1)
   const mapRangeLabel =
     visibleDays.length === 0
@@ -198,14 +235,80 @@ function ResultPage() {
     )
   }
 
+  function beginEdit() {
+    if (!itinerary) {
+      return
+    }
+
+    setDraft(cloneItinerary(itinerary))
+    setEditError('')
+    setIsEditing(true)
+  }
+
+  function cancelEdit() {
+    setDraft(null)
+    setEditError('')
+    setIsEditing(false)
+  }
+
+  function updateDayStops(dayNumber: number, updater: (stops: ItineraryStop[]) => ItineraryStop[]) {
+    setDraft((current) => {
+      if (!current) {
+        return current
+      }
+
+      return {
+        ...current,
+        days: current.days.map((day) => {
+          if (day.day !== dayNumber) {
+            return day
+          }
+
+          return { ...day, stops: withTravelTimes(updater(day.stops), places, lodging) }
+        }),
+      }
+    })
+  }
+
+  function moveStop(dayNumber: number, stopIndex: number, offset: number) {
+    updateDayStops(dayNumber, (stops) => {
+      const nextIndex = stopIndex + offset
+
+      if (nextIndex < 0 || nextIndex >= stops.length) {
+        return stops
+      }
+
+      const next = [...stops]
+      const [moved] = next.splice(stopIndex, 1)
+      next.splice(nextIndex, 0, moved)
+      return next
+    })
+  }
+
+  async function finishEdit() {
+    if (!draft) {
+      return
+    }
+
+    setIsSavingEdits(true)
+    setEditError('')
+
+    try {
+      await saveItinerary(draft)
+      setItinerary(draft)
+      setDraft(null)
+      setIsEditing(false)
+    } catch (saveError) {
+      setEditError(saveError instanceof Error ? saveError.message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSavingEdits(false)
+    }
+  }
+
   return (
     <section className="result-page">
       <div className="result-heading">
         <div className="result-flow">
-          <Link to={`/planner/${plan.id}`} className="result-back">
-            <img src={resultArrowLeft} alt="" />
-            여행 주머니로 돌아가기
-          </Link>
           <ol className="planner-steps">
             <li>
               <span>✓</span>
@@ -244,16 +347,37 @@ function ResultPage() {
           </div>
           <div className="result-actions">
             <div>
-              <button type="button" className="result-edit" disabled>
-                <img src={resultPencil} alt="" />
-                일정 수정
-              </button>
+              <Link to={`/planner/${plan.id}`} className="result-edit">
+                <img src={resultArrowLeft} alt="" />
+                여행 주머니로 돌아가기
+              </Link>
+              {isEditing ? (
+                <>
+                  <button type="button" className="result-edit" disabled={isSavingEdits} onClick={cancelEdit}>
+                    수정 취소
+                  </button>
+                  <button
+                    type="button"
+                    className="result-edit is-active"
+                    disabled={isSavingEdits || !draft}
+                    onClick={() => void finishEdit()}
+                  >
+                    <img src={resultPencil} alt="" />
+                    {isSavingEdits ? '저장 중' : '수정 완료'}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="result-edit" disabled={!itinerary} onClick={beginEdit}>
+                  <img src={resultPencil} alt="" />
+                  일정 수정
+                </button>
+              )}
               <button type="button" className="result-save" disabled>
                 <img src={resultBookmark} alt="" />
                 계획 저장
               </button>
             </div>
-            <p>아직 저장하지 않은 계획이에요</p>
+            {editError ? <p role="alert">{editError}</p> : <p>아직 저장하지 않은 계획이에요</p>}
           </div>
         </div>
       </div>
@@ -290,9 +414,9 @@ function ResultPage() {
               <img src={resultCalendarDays} alt="" />
               나의 {nights}박 {days}일 일정
             </h2>
-            <span>예시 일정</span>
+            <span>{isEditing ? '일정 수정 중' : '예시 일정'}</span>
           </div>
-          <p className="result-schedule-note">방문 시간은 현지 기준 · 모든 이동 시간은 예상값이에요</p>
+          <p className="result-schedule-note">선택한 끼니는 매일 넣고, 이동 시간은 예상값이에요</p>
           {scheduleDays.length === 0 ? (
             <p className="result-status">저장된 일정이 없습니다.</p>
           ) : (
@@ -313,27 +437,53 @@ function ResultPage() {
                       const place = places.find((item) => item.id === stop.placeId)
                       const previous = day.stops[index - 1]
                       const travel = formatTravel(stop.travelMinutes)
-                      const isLodging = stop.kind === 'lodging'
-                      const label = isLodging ? '숙소' : String(++visitNumber)
+                      const isNamedStop = stop.kind !== 'visit'
+                      const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)
 
                       return (
                         <li key={`${stop.placeId}-${stop.startTime}-${index}`}>
                           {travel && (
                             <p className={index === 0 ? 'result-travel result-travel-start' : 'result-travel'}>
-                              <img src={index === 0 || previous?.kind === 'lodging' ? resultTrain : resultBus} alt="" />
+                              <img src={index === 0 || previous?.kind === 'lodging' || previous?.kind === 'arrival' || stop.kind === 'departure' ? resultTrain : resultBus} alt="" />
                               {previous ? `${previous.name}에서 이동 · ${travel}` : `이동 · ${travel}`}
                             </p>
                           )}
-                          <div className={isLodging ? 'result-visit result-visit-stay' : 'result-visit'}>
+                          <div className={isNamedStop ? 'result-visit result-visit-stay' : 'result-visit'}>
                             <span style={{ background: color }}>{label}</span>
                             <div>
-                              <p>
-                                {stop.startTime} – {stop.endTime}
-                                <small>{isLodging ? '숙소' : stopKindLabel(stop)}</small>
-                              </p>
                               <strong>{stop.name}</strong>
-                              <small>{place ? formatPlaceSchedule(place) : isLodging ? '숙소에서 하루를 시작하거나 마무리해요.' : '영업시간 정보 없음'}</small>
+                              <small>
+                                {stop.kind === 'arrival'
+                                  ? '여행지에 도착해 일정을 시작해요.'
+                                  : stop.kind === 'departure'
+                                    ? '여행지에서 출발해 일정을 마무리해요.'
+                                    : place
+                                      ? formatPlaceSchedule(place)
+                                      : stop.kind === 'lodging'
+                                        ? '숙소에서 하루를 시작하거나 마무리해요.'
+                                        : '영업시간 정보 없음'}
+                              </small>
                             </div>
+                            {isEditing && (
+                              <div className="result-visit-order">
+                                <button
+                                  type="button"
+                                  aria-label="위로 옮기기"
+                                  disabled={index === 0}
+                                  onClick={() => moveStop(day.day, index, -1)}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="아래로 옮기기"
+                                  disabled={index === day.stops.length - 1}
+                                  onClick={() => moveStop(day.day, index, 1)}
+                                >
+                                  ↓
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </li>
                       )

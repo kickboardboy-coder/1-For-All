@@ -26,6 +26,132 @@ export type PlanMeals = {
   includeDinner: boolean
 }
 
+export const transitModes = ['flight', 'train', 'car'] as const
+
+export type TransitMode = (typeof transitModes)[number]
+
+export type PlanTransit = {
+  transport: TransitMode
+  placeId: string
+  name: string
+  latitude: number
+  longitude: number
+  time: string
+}
+
+export const transitModeLabel: Record<TransitMode, string> = {
+  flight: '비행기',
+  train: '기차',
+  car: '자가용',
+}
+
+export function isTransitMode(value: unknown): value is TransitMode {
+  return transitModes.some((mode) => mode === value)
+}
+
+const emptyTransitFields = {
+  arrivalTransport: null,
+  arrivalPlaceId: null,
+  arrivalPlaceName: null,
+  arrivalLatitude: null,
+  arrivalLongitude: null,
+  arrivalTime: null,
+  departureTransport: null,
+  departurePlaceId: null,
+  departurePlaceName: null,
+  departureLatitude: null,
+  departureLongitude: null,
+  departureTime: null,
+}
+
+function transitFields(gate: 'arrival' | 'departure', transit: PlanTransit | null) {
+  if (!transit) {
+    if (gate === 'arrival') {
+      return {
+        arrivalTransport: null,
+        arrivalPlaceId: null,
+        arrivalPlaceName: null,
+        arrivalLatitude: null,
+        arrivalLongitude: null,
+        arrivalTime: null,
+      }
+    }
+
+    return {
+      departureTransport: null,
+      departurePlaceId: null,
+      departurePlaceName: null,
+      departureLatitude: null,
+      departureLongitude: null,
+      departureTime: null,
+    }
+  }
+
+  if (gate === 'arrival') {
+    return {
+      arrivalTransport: transit.transport,
+      arrivalPlaceId: transit.placeId,
+      arrivalPlaceName: transit.name,
+      arrivalLatitude: transit.latitude,
+      arrivalLongitude: transit.longitude,
+      arrivalTime: transit.time,
+    }
+  }
+
+  return {
+    departureTransport: transit.transport,
+    departurePlaceId: transit.placeId,
+    departurePlaceName: transit.name,
+    departureLatitude: transit.latitude,
+    departureLongitude: transit.longitude,
+    departureTime: transit.time,
+  }
+}
+
+export function transitFromPlan(plan: Plan, gate: 'arrival' | 'departure'): PlanTransit | null {
+  if (gate === 'arrival') {
+    if (
+      !isTransitMode(plan.arrivalTransport) ||
+      !plan.arrivalPlaceId ||
+      !plan.arrivalPlaceName ||
+      plan.arrivalLatitude === null ||
+      plan.arrivalLongitude === null ||
+      !plan.arrivalTime
+    ) {
+      return null
+    }
+
+    return {
+      transport: plan.arrivalTransport,
+      placeId: plan.arrivalPlaceId,
+      name: plan.arrivalPlaceName,
+      latitude: plan.arrivalLatitude,
+      longitude: plan.arrivalLongitude,
+      time: plan.arrivalTime,
+    }
+  }
+
+  if (
+    !isTransitMode(plan.departureTransport) ||
+    !plan.departurePlaceId ||
+    !plan.departurePlaceName ||
+    plan.departureLatitude === null ||
+    plan.departureLongitude === null ||
+    !plan.departureTime
+  ) {
+    return null
+  }
+
+  return {
+    transport: plan.departureTransport,
+    placeId: plan.departurePlaceId,
+    name: plan.departurePlaceName,
+    latitude: plan.departureLatitude,
+    longitude: plan.departureLongitude,
+    time: plan.departureTime,
+  }
+}
+
 type NewPlan = {
   country: string
   region: string
@@ -59,6 +185,7 @@ export async function savePlan({ country, region, nights, startDate, lodging, da
     includeBreakfast: meals.includeBreakfast,
     includeLunch: meals.includeLunch,
     includeDinner: meals.includeDinner,
+    ...emptyTransitFields,
     status: 'pending' as const,
     updatedAt: new Date().toISOString(),
   }
@@ -118,6 +245,18 @@ export async function updatePlanDayHours(planId: string, dayStart: string | null
 
   const updatedAt = new Date().toISOString()
   await updateDoc(doc(db, 'plans', planId), { dayStart, dayEnd, updatedAt })
+  return updatedAt
+}
+
+export async function updatePlanTransit(planId: string, gate: 'arrival' | 'departure', transit: PlanTransit | null) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const updatedAt = new Date().toISOString()
+  await updateDoc(doc(db, 'plans', planId), { ...transitFields(gate, transit), updatedAt })
   return updatedAt
 }
 
@@ -185,6 +324,18 @@ function toPlan(id: string, data: DocumentData): Plan | null {
     includeBreakfast: typeof data.includeBreakfast === 'boolean' ? data.includeBreakfast : null,
     includeLunch: typeof data.includeLunch === 'boolean' ? data.includeLunch : null,
     includeDinner: typeof data.includeDinner === 'boolean' ? data.includeDinner : null,
+    arrivalTransport: typeof data.arrivalTransport === 'string' ? data.arrivalTransport : null,
+    arrivalPlaceId: typeof data.arrivalPlaceId === 'string' ? data.arrivalPlaceId : null,
+    arrivalPlaceName: typeof data.arrivalPlaceName === 'string' ? data.arrivalPlaceName : null,
+    arrivalLatitude: typeof data.arrivalLatitude === 'number' ? data.arrivalLatitude : null,
+    arrivalLongitude: typeof data.arrivalLongitude === 'number' ? data.arrivalLongitude : null,
+    arrivalTime: typeof data.arrivalTime === 'string' ? data.arrivalTime : null,
+    departureTransport: typeof data.departureTransport === 'string' ? data.departureTransport : null,
+    departurePlaceId: typeof data.departurePlaceId === 'string' ? data.departurePlaceId : null,
+    departurePlaceName: typeof data.departurePlaceName === 'string' ? data.departurePlaceName : null,
+    departureLatitude: typeof data.departureLatitude === 'number' ? data.departureLatitude : null,
+    departureLongitude: typeof data.departureLongitude === 'number' ? data.departureLongitude : null,
+    departureTime: typeof data.departureTime === 'string' ? data.departureTime : null,
     status: data.status,
     updatedAt: data.updatedAt,
   }
