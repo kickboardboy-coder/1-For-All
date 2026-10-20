@@ -2049,17 +2049,30 @@ body {
 }
 
 .result-map-canvas {
+  position: relative;
   display: flex;
-  align-items: flex-end;
   height: 640px;
-  padding: 20px;
+  overflow: hidden;
   background: #f3f2ec;
   color: #7a8983;
   font-size: 12px;
 }
 
+.result-map-google {
+  width: 100%;
+  height: 100%;
+}
+
 .result-map-canvas p {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  z-index: 1;
   margin: 0;
+  max-width: 360px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 88%);
 }
 
 .result-legend {

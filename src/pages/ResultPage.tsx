@@ -3,6 +3,9 @@ import { Link, Navigate, useParams } from 'react-router'
 import { getItinerary } from '../api/itinerary'
 import { getPlan } from '../api/plans'
 import { getPlaces } from '../api/places'
+import MapsProvider from '../components/MapsProvider'
+import ResultMap, { dayColorNames, dayColors, dayRoutesFrom } from '../components/ResultMap'
+import { findRegion } from '../data/destinations'
 import resultArrowLeft from '../assets/result-arrow-left.svg'
 import resultBookmark from '../assets/result-bookmark.svg'
 import resultCalendarDays from '../assets/result-calendar-days.svg'
@@ -14,8 +17,6 @@ import type { Plan } from '../types/plan'
 import type { Place } from '../types/place'
 
 const weekdayLabel = ['일', '월', '화', '수', '목', '금', '토']
-const dayColors = ['#27846e', '#c4514a', '#6b5ea8']
-const dayColorNames = ['민트', '살구', '라벤더']
 
 function formatDateRange(startDate: string | null, nights: number | null) {
   if (!startDate || nights === null) {
@@ -124,6 +125,17 @@ function ResultPage() {
   const days = plan.nights === null ? itinerary?.days.length ?? 1 : nights + 1
   const placeCount = places.length
   const scheduleDays = itinerary?.days ?? []
+  const mapRegion = findRegion(plan.country, plan.region)
+  const lodging =
+    plan.lodgingPlaceId && plan.lodgingName && plan.lodgingLatitude !== null && plan.lodgingLongitude !== null
+      ? {
+          placeId: plan.lodgingPlaceId,
+          name: plan.lodgingName,
+          latitude: plan.lodgingLatitude,
+          longitude: plan.lodgingLongitude,
+        }
+      : null
+  const routes = dayRoutesFrom(itinerary, places, lodging)
 
   return (
     <section className="result-page">
@@ -193,9 +205,14 @@ function ResultPage() {
             </h2>
             <span>전체 일정 표시 중</span>
           </div>
-          <div className="result-map-canvas">
-            <p>동선 아래를 위한 예시 지도 · 실제 길찾기 경로가 아니에요</p>
-          </div>
+          <MapsProvider>
+            <ResultMap
+              latitude={mapRegion?.latitude ?? 20}
+              longitude={mapRegion?.longitude ?? 0}
+              zoom={mapRegion ? 12 : 2}
+              routes={routes}
+            />
+          </MapsProvider>
           <div className="result-legend">
             {Array.from({ length: days }, (_, index) => (
               <p key={index}>
