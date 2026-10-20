@@ -1,4 +1,5 @@
-const dayLabels = ['일', '월', '화', '수', '목', '금', '토']
+export const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'] as const
+const dayLabels = weekdayLabels
 const textLimit = 80
 
 export type PlaceSchedule = {
@@ -101,4 +102,36 @@ export function formatPlaceSchedule(schedule: PlaceSchedule) {
   ].filter(Boolean)
 
   return parts.join(' · ') || '영업시간 정보 없음'
+}
+
+export function weekdayIndexFromDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+  if (!match) {
+    return null
+  }
+
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay()
+}
+
+export function closedWeekdayIndexes(closedDays: string | null) {
+  if (!closedDays) {
+    return []
+  }
+
+  if (closedDays === '매일') {
+    return [0, 1, 2, 3, 4, 5, 6]
+  }
+
+  return [...new Set(closedDays.split('·').flatMap((label) => {
+    const day = weekdayLabels.findIndex((item) => item === label.trim())
+    return day >= 0 ? [day] : []
+  }))]
+}
+
+export function isClosedOnDate(closedDays: string | null, date: string) {
+  const weekday = weekdayIndexFromDate(date)
+  const closed = closedWeekdayIndexes(closedDays)
+
+  return weekday !== null && closed.includes(weekday)
 }

@@ -16,10 +16,10 @@ const stayTypes = new Set([
   'private_guest_room',
 ])
 
+const cafeTypes = new Set(['cafe', 'coffee_shop', 'cat_cafe', 'dog_cafe', 'coffee_stand', 'tea_house'])
+
 const foodTypes = new Set([
   'restaurant',
-  'cafe',
-  'coffee_shop',
   'bakery',
   'bar',
   'pub',
@@ -37,22 +37,47 @@ function categoryOf(type: string): PlaceCategory | null {
     return 'stay'
   }
 
-  if (foodTypes.has(type) || type.endsWith('_restaurant') || type.endsWith('_cafe') || type.endsWith('_bar')) {
+  if (cafeTypes.has(type) || type.endsWith('_cafe') || type.endsWith('_coffee_shop')) {
+    return 'sight'
+  }
+
+  if (foodTypes.has(type) || type.endsWith('_restaurant') || type.endsWith('_bar')) {
     return 'food'
   }
 
   return null
 }
 
+export function isCafeName(name: string) {
+  return /카페|cafe|커피|coffee|티룸|tea\s*house|스타벅스|starbucks|투썸|twosome|이디야|ediya|할리스|hollys|파스쿠찌|pascucci|엔제리너스|커피빈|coffee\s*bean|카페베네|탐앤탐스|폴바셋|paul\s*bassett|블루보틀|blue\s*bottle|테라로사|빽다방|컴포즈|메가\s*mgc|메가커피|매머드|더벤티|바나프레소|드롭탑|커피베이|공차|gong\s*cha/i.test(
+    name,
+  )
+}
+
+export function placeRole(place: { name: string; category: PlaceCategory }): PlaceCategory {
+  if (place.category !== 'stay' && isCafeName(place.name)) {
+    return 'sight'
+  }
+
+  return place.category
+}
+
 export function categoryFromPlaceTypes(primaryType?: string | null, types?: string[] | null): PlaceCategory {
-  if (primaryType) {
-    const fromPrimary = categoryOf(primaryType)
-    if (fromPrimary) {
-      return fromPrimary
+  const all = [primaryType, ...(types ?? [])].filter((type): type is string => Boolean(type))
+
+  for (const type of all) {
+    if (categoryOf(type) === 'stay') {
+      return 'stay'
     }
   }
 
-  for (const type of types ?? []) {
+  for (const type of all) {
+    if (cafeTypes.has(type) || type.endsWith('_cafe') || type.endsWith('_coffee_shop')) {
+      return 'sight'
+    }
+  }
+
+  for (const type of all) {
     const fromType = categoryOf(type)
     if (fromType) {
       return fromType

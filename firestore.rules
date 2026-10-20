@@ -21,6 +21,13 @@ rules_version = '2';
 //   - includeBreakfast: bool - schedule a breakfast stop
 //   - includeLunch: bool - schedule a lunch stop
 //   - includeDinner: bool - schedule a dinner stop
+//   - arrivalTransport: flight|train|car or null - how the traveler arrives
+//   - arrivalPlaceId/Name/Latitude/Longitude: pocket place for airport, station, or start
+//   - arrivalTime: HH:mm or null - first-day arrival time
+//   - departureTransport: flight|train|car or null - how the traveler leaves
+//   - departurePlaceId/Name/Latitude/Longitude: pocket place for return
+//   - departureTime: HH:mm or null - last-day departure time
+//   - savedAt: ISO 8601 string or null - when the traveler confirmed 계획 저장
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
 //
@@ -46,7 +53,7 @@ rules_version = '2';
 //   - placeId: string (required, 1-128 bytes)
 //   - name: string (required, 1-300 bytes)
 //   - category: string (required) - sight, food, or stay
-//   - kind: string (required) - lodging, visit, breakfast, lunch, or dinner
+//   - kind: string (required) - lodging, visit, breakfast, lunch, dinner, arrival, or departure
 //   - startTime: string HH:mm (required)
 //   - endTime: string HH:mm (required)
 //   - travelMinutes: int or null (required) - minutes from the previous stop
@@ -79,6 +86,19 @@ service cloud.firestore {
         'includeBreakfast',
         'includeLunch',
         'includeDinner',
+        'arrivalTransport',
+        'arrivalPlaceId',
+        'arrivalPlaceName',
+        'arrivalLatitude',
+        'arrivalLongitude',
+        'arrivalTime',
+        'departureTransport',
+        'departurePlaceId',
+        'departurePlaceName',
+        'departureLatitude',
+        'departureLongitude',
+        'departureTime',
+        'savedAt',
         'status',
         'updatedAt',
       ])
@@ -93,7 +113,10 @@ service cloud.firestore {
         && isValidLodging(data)
         && isValidDayHours(data)
         && isValidMeals(data)
+        && isValidArrival(data)
+        && isValidDeparture(data)
         && data.status in ['pending', 'optimized']
+        && (!('savedAt' in data) || data.savedAt == null || (data.savedAt is string && data.savedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$')))
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
     }
@@ -127,6 +150,36 @@ service cloud.firestore {
           && data.dayEnd.matches('^([01]\\d|2[0-3]):[0-5]\\d$')
           && data.dayStart < data.dayEnd
         );
+    }
+
+    function isValidTransitPoint(transport, placeId, name, latitude, longitude, time) {
+      return transport in ['flight', 'train', 'car']
+        && placeId is string
+        && placeId.size() > 0
+        && placeId.size() <= 128
+        && name is string
+        && name.size() > 0
+        && name.size() <= 300
+        && latitude is number
+        && latitude >= -90
+        && latitude <= 90
+        && longitude is number
+        && longitude >= -180
+        && longitude <= 180
+        && time is string
+        && time.matches('^([01]\\d|2[0-3]):[0-5]\\d$');
+    }
+
+    function isValidArrival(data) {
+      return (!('arrivalTransport' in data) && !('arrivalPlaceId' in data) && !('arrivalPlaceName' in data) && !('arrivalLatitude' in data) && !('arrivalLongitude' in data) && !('arrivalTime' in data))
+        || (data.arrivalTransport == null && data.arrivalPlaceId == null && data.arrivalPlaceName == null && data.arrivalLatitude == null && data.arrivalLongitude == null && data.arrivalTime == null)
+        || isValidTransitPoint(data.arrivalTransport, data.arrivalPlaceId, data.arrivalPlaceName, data.arrivalLatitude, data.arrivalLongitude, data.arrivalTime);
+    }
+
+    function isValidDeparture(data) {
+      return (!('departureTransport' in data) && !('departurePlaceId' in data) && !('departurePlaceName' in data) && !('departureLatitude' in data) && !('departureLongitude' in data) && !('departureTime' in data))
+        || (data.departureTransport == null && data.departurePlaceId == null && data.departurePlaceName == null && data.departureLatitude == null && data.departureLongitude == null && data.departureTime == null)
+        || isValidTransitPoint(data.departureTransport, data.departurePlaceId, data.departurePlaceName, data.departureLatitude, data.departureLongitude, data.departureTime);
     }
 
     function isValidMeals(data) {
@@ -183,7 +236,7 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 300
         && request.resource.data.category in ['sight', 'food', 'stay']
-        && request.resource.data.kind in ['lodging', 'visit', 'breakfast', 'lunch', 'dinner']
+        && request.resource.data.kind in ['lodging', 'visit', 'breakfast', 'lunch', 'dinner', 'arrival', 'departure']
         && request.resource.data.startTime is string
         && request.resource.data.endTime is string
         && request.resource.data.startTime.matches('^([01]\\d|2[0-3]):[0-5]\\d$')

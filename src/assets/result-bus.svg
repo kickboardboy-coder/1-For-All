@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="bus-front" clip-path="url(#clip0_0_8)">
+<path id="Vector" d="M2.16632 3.25L1.0829 3.79167M2.16632 3.25V2.70833C2.16632 2.11002 2.65138 1.625 3.24974 1.625H9.75026C10.3486 1.625 10.8337 2.11002 10.8337 2.70833V3.25M2.16632 3.25V5.95833M5.41658 3.25H7.58342M11.9171 3.79167L10.8337 3.25M10.8337 3.25V5.95833M9.75026 10.2917C10.3486 10.2917 10.8337 9.80664 10.8337 9.20833V5.95833M9.75026 10.2917H3.24974M9.75026 10.2917V11.375M10.8337 5.95833H2.16632M2.16632 5.95833V9.20833C2.16632 9.80664 2.65138 10.2917 3.24974 10.2917M3.24974 10.2917V11.375M4.33316 8.125H4.33858M8.66684 8.125H8.67226" stroke-width="1.8" stroke-linecap="round" stroke="#62766E"/>
+</g>
+<defs>
+<clipPath id="clip0_0_8">
+<rect width="13" height="13" fill="white"/>
+</clipPath>
+</defs>
+</svg>
