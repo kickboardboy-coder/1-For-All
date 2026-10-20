@@ -27,6 +27,7 @@ rules_version = '2';
 //   - departureTransport: flight|train|car or null - how the traveler leaves
 //   - departurePlaceId/Name/Latitude/Longitude: pocket place for return
 //   - departureTime: HH:mm or null - last-day departure time
+//   - savedAt: ISO 8601 string or null - when the traveler confirmed 계획 저장
 //   - status: string (required) - pending or optimized
 //   - updatedAt: string (required) - ISO 8601 update time
 //
@@ -97,6 +98,7 @@ service cloud.firestore {
         'departureLatitude',
         'departureLongitude',
         'departureTime',
+        'savedAt',
         'status',
         'updatedAt',
       ])
@@ -114,6 +116,7 @@ service cloud.firestore {
         && isValidArrival(data)
         && isValidDeparture(data)
         && data.status in ['pending', 'optimized']
+        && (!('savedAt' in data) || data.savedAt == null || (data.savedAt is string && data.savedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$')))
         && data.updatedAt is string
         && data.updatedAt.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$');
     }

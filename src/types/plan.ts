@@ -35,6 +35,7 @@ export type Plan = {
   departureLatitude: number | null
   departureLongitude: number | null
   departureTime: string | null
+  savedAt: string | null
   status: PlanStatus
   updatedAt: string
 }

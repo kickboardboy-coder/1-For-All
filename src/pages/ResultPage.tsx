@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router'
+import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { getItinerary, saveItinerary, travelMinutes } from '../api/itinerary'
-import { getPlan } from '../api/plans'
+import { getPlan, markPlanSaved } from '../api/plans'
 import { getPlaces } from '../api/places'
 import MapsProvider from '../components/MapsProvider'
 import ResultMap, { dayColorNames, dayColors, dayRoutesFrom } from '../components/ResultMap'
@@ -125,6 +125,7 @@ function formatDayDate(value: string) {
 
 function ResultPage() {
   const { planId } = useParams()
+  const navigate = useNavigate()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [places, setPlaces] = useState<Place[]>([])
@@ -305,6 +306,31 @@ function ResultPage() {
     }
   }
 
+  async function handleSavePlan() {
+    if (!planId || (!itinerary && !draft)) {
+      return
+    }
+
+    setIsSavingEdits(true)
+    setEditError('')
+
+    try {
+      if (isEditing && draft) {
+        await saveItinerary(draft)
+        setItinerary(draft)
+        setDraft(null)
+        setIsEditing(false)
+      }
+
+      const savedAt = await markPlanSaved(planId)
+      setPlan((current) => (current ? { ...current, savedAt, updatedAt: savedAt } : current))
+      navigate('/plans', { replace: true })
+    } catch (saveError) {
+      setEditError(saveError instanceof Error ? saveError.message : '계획을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      setIsSavingEdits(false)
+    }
+  }
+
   return (
     <section className="result-page">
       <div className="result-heading">
@@ -372,12 +398,21 @@ function ResultPage() {
                   일정 수정
                 </button>
               )}
-              <button type="button" className="result-save" disabled>
+              <button
+                type="button"
+                className="result-save"
+                disabled={isSavingEdits || (!itinerary && !draft)}
+                onClick={() => void handleSavePlan()}
+              >
                 <img src={resultBookmark} alt="" />
-                계획 저장
+                {isSavingEdits ? '저장 중' : plan.savedAt ? '다시 저장' : '계획 저장'}
               </button>
             </div>
-            {editError ? <p role="alert">{editError}</p> : <p>아직 저장하지 않은 계획이에요</p>}
+            {editError ? (
+              <p role="alert">{editError}</p>
+            ) : (
+              <p>{plan.savedAt ? '내 여행 목록에 저장한 계획이에요' : '아직 저장하지 않은 계획이에요'}</p>
+            )}
           </div>
         </div>
       </div>

@@ -186,6 +186,7 @@ export async function savePlan({ country, region, nights, startDate, lodging, da
     includeLunch: meals.includeLunch,
     includeDinner: meals.includeDinner,
     ...emptyTransitFields,
+    savedAt: null,
     status: 'pending' as const,
     updatedAt: new Date().toISOString(),
   }
@@ -272,6 +273,18 @@ export async function updatePlanMeals(planId: string, meals: PlanMeals) {
   return updatedAt
 }
 
+export async function markPlanSaved(planId: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const savedAt = new Date().toISOString()
+  await updateDoc(doc(db, 'plans', planId), { savedAt, updatedAt: savedAt })
+  return savedAt
+}
+
 export async function markPlanOptimized(planId: string) {
   const user = auth.currentUser
 
@@ -336,6 +349,7 @@ function toPlan(id: string, data: DocumentData): Plan | null {
     departureLatitude: typeof data.departureLatitude === 'number' ? data.departureLatitude : null,
     departureLongitude: typeof data.departureLongitude === 'number' ? data.departureLongitude : null,
     departureTime: typeof data.departureTime === 'string' ? data.departureTime : null,
+    savedAt: typeof data.savedAt === 'string' ? data.savedAt : null,
     status: data.status,
     updatedAt: data.updatedAt,
   }
