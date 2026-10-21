@@ -184,6 +184,139 @@ body {
   }
 }
 
+.skeleton-bone {
+  display: block;
+  background: linear-gradient(90deg, #e8f4ef 0%, #f3faf7 45%, #e8f4ef 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.skeleton-plan-card {
+  pointer-events: none;
+  cursor: default;
+}
+
+.skeleton-thumb {
+  flex: none;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+}
+
+.skeleton-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skeleton-line {
+  height: 12px;
+  width: 62%;
+  border-radius: 999px;
+}
+
+.skeleton-line-xl {
+  width: 72%;
+  height: 22px;
+}
+
+.skeleton-line-lg {
+  width: 48%;
+}
+
+.skeleton-line-sm {
+  width: 34%;
+}
+
+.skeleton-pocket-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 84px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f6f8f7;
+}
+
+.skeleton-pocket-thumb {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+}
+
+.skeleton-loader.skeleton-pocket {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.skeleton-result-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 36px 24px;
+}
+
+.skeleton-result-workspace {
+  display: flex;
+  gap: 24px;
+  padding: 0 32px 24px;
+}
+
+.skeleton-result-map,
+.skeleton-result-list {
+  border: 1px solid #e4ebe7;
+  border-radius: 24px;
+  background: #fff;
+}
+
+.skeleton-result-map {
+  flex: 1;
+  min-height: 420px;
+  padding: 16px;
+}
+
+.skeleton-map {
+  width: 100%;
+  height: 100%;
+  min-height: 388px;
+  border-radius: 16px;
+}
+
+.skeleton-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 400px;
+  padding: 20px;
+}
+
+.skeleton-result-stop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skeleton-badge {
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+}
+
 .plans-page {
   width: 760px;
   max-width: 100%;
@@ -483,6 +616,57 @@ body {
   margin: -24px -32px;
   background: #f6f8f7;
   font-family: 'Noto Sans KR', sans-serif;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(36 61 55 / 36%);
+}
+
+.confirm-dialog {
+  width: 320px;
+  padding: 28px 24px 20px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgb(36 61 55 / 18%);
+  text-align: center;
+}
+
+.confirm-dialog p {
+  margin: 0 0 20px;
+  color: #243d37;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.confirm-dialog div {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-dialog button {
+  flex: 1;
+  height: 44px;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  background: #fff;
+  color: #243d37;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.confirm-dialog .is-confirm {
+  border-color: #27846e;
+  background: #27846e;
+  color: #fff;
 }
 
 .planner-heading {
@@ -927,6 +1111,39 @@ body {
   font-weight: 700;
 }
 
+.planner-place-card-photo {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #e8f4ef;
+}
+
+.planner-place-card-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.planner-place-card-photo span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: #fff;
+  color: #27846e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .planner-place-google-icon {
   overflow: hidden;
 }
@@ -938,7 +1155,14 @@ body {
   filter: brightness(0) invert(1);
 }
 
+.planner-place-card-copy {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
+}
+
 .planner-place-card strong {
+  display: block;
   color: #243d37;
   font-size: 15px;
 }
@@ -948,6 +1172,8 @@ body {
   color: #7a8983;
   font-size: 12px;
   line-height: 1.45;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .planner-place-card-actions {
@@ -1016,7 +1242,7 @@ body {
   font-size: 20px;
 }
 
-.planner-pocket-heading span {
+.planner-pocket-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1028,6 +1254,13 @@ body {
   color: #27846e;
   font-size: 12px;
   font-weight: 700;
+}
+
+.planner-pocket-mix {
+  color: #7a8983;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .planner-pocket-heading button,
@@ -1120,10 +1353,18 @@ body {
 .planner-place-thumb {
   position: relative;
   flex-shrink: 0;
+  overflow: hidden;
   width: 60px;
   height: 60px;
   border-radius: 12px;
   background: #e8f4ef;
+}
+
+.planner-place-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .planner-place-thumb span {

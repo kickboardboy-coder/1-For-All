@@ -4,7 +4,7 @@ import { toPlaceSearchResult, type PlaceSearchResult } from './PlaceSearchRunner
 import { useMapsStatus } from './MapsProvider'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 
-const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours']
+const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours', 'photos']
 const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor']
 
 type PlannerMapProps = {
@@ -151,6 +151,7 @@ function PlannerMap({
           address: pinDetails?.address ?? selectedFromPin.address,
           iconUrl: pinDetails?.iconUrl ?? selectedFromPin.iconUrl,
           iconBackgroundColor: pinDetails?.iconBackgroundColor ?? selectedFromPin.iconBackgroundColor,
+          photoUrl: pinDetails?.photoUrl ?? selectedFromPin.photoUrl,
           openingHours: selectedFromPin.openingHours ?? pinDetails?.openingHours ?? null,
           closedDays: selectedFromPin.closedDays ?? pinDetails?.closedDays ?? null,
           breakTime: selectedFromPin.breakTime ?? pinDetails?.breakTime ?? null,
@@ -180,7 +181,7 @@ function PlannerMap({
       try {
         const { places: found } = await placesLibrary.Place.searchByText({
           textQuery: pinnedPlace.name,
-          fields: ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours'],
+          fields: ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours', 'photos'],
           language: 'ko',
           region: 'KR',
           maxResultCount: 1,
@@ -212,6 +213,7 @@ function PlannerMap({
           regularOpeningHours: first.regularOpeningHours,
           svgIconMaskURI: first.svgIconMaskURI,
           iconBackgroundColor: first.iconBackgroundColor,
+          photos: first.photos,
         })
 
         if (result) {
@@ -270,6 +272,7 @@ function PlannerMap({
         regularOpeningHours: place.regularOpeningHours,
         svgIconMaskURI: place.svgIconMaskURI,
         iconBackgroundColor: place.iconBackgroundColor,
+        photos: place.photos,
       })
 
       if (!result) {
@@ -317,7 +320,12 @@ function PlannerMap({
       </Map>
       {selectedPlace && (
         <article className="planner-place-card">
-          {selectedIndex >= 0 ? (
+          {selectedPlace.photoUrl ? (
+            <div className="planner-place-card-photo">
+              <img src={selectedPlace.photoUrl} alt="" />
+              {selectedIndex >= 0 && <span>{selectedIndex + 1}</span>}
+            </div>
+          ) : selectedIndex >= 0 ? (
             <span>{selectedIndex + 1}</span>
           ) : selectedPlace.iconUrl ? (
             <span
@@ -329,9 +337,9 @@ function PlannerMap({
           ) : (
             <span>·</span>
           )}
-          <div>
+          <div className="planner-place-card-copy">
             <strong>{selectedPlace.name}</strong>
-            {selectedPlace.address && <p>{selectedPlace.address}</p>}
+            {selectedPlace.address && <p className="planner-place-card-address">{selectedPlace.address}</p>}
             {placeSchedule !== '영업시간 정보 없음' && <p>{placeSchedule}</p>}
           </div>
           <div className="planner-place-card-actions">

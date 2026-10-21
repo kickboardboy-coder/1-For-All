@@ -17,7 +17,7 @@ import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
-import LoadingSpinner from '../components/LoadingSpinner'
+import SkeletonLoader from '../components/SkeletonLoader'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
@@ -115,6 +115,7 @@ function asMapPlace(place: Place): PlaceSearchResult {
     breakTime: place.breakTime,
     iconUrl: null,
     iconBackgroundColor: null,
+    photoUrl: place.photoUrl,
   }
 }
 
@@ -202,6 +203,7 @@ function PlannerPage() {
   const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
   const [emptySearchQuery, setEmptySearchQuery] = useState<string | null>(null)
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false)
   const searchTimer = useRef<number | null>(null)
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
@@ -216,6 +218,8 @@ function PlannerPage() {
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
   const stayPlaces = places.filter((place) => place.category === 'stay')
+  const sightCount = places.filter((place) => placeRole(place) === 'sight').length
+  const foodCount = places.filter((place) => placeRole(place) === 'food').length
   const arrival = completeTransit(arrivalForm, places, savedArrival)
   const departure = completeTransit(departureForm, places, savedDeparture)
   const arrivalHubType = hubTypeOf(arrivalForm.transport)
@@ -610,6 +614,7 @@ function PlannerPage() {
         openingHours: result.openingHours,
         closedDays: result.closedDays,
         breakTime: result.breakTime,
+        photoUrl: result.photoUrl,
       })
 
       if (planId) {
@@ -686,6 +691,7 @@ function PlannerPage() {
       return
     }
 
+    setIsConfirmingClear(false)
     setIsUpdatingPlaces(true)
     setError('')
 
@@ -1279,17 +1285,22 @@ function PlannerPage() {
             <div>
               <img src={plannerBag} alt="" />
               <h2>여행 주머니</h2>
-              <span>{places.length}</span>
+              <span className="planner-pocket-count">{places.length}</span>
+              <span className="planner-pocket-mix">
+                관광지 {sightCount} · 맛집 {foodCount}
+              </span>
             </div>
-            <button type="button" disabled={!planId || places.length === 0 || isUpdatingPlaces} onClick={handleClearPlaces}>
+            <button
+              type="button"
+              disabled={!planId || places.length === 0 || isUpdatingPlaces}
+              onClick={() => setIsConfirmingClear(true)}
+            >
               전체 비우기
             </button>
           </div>
           <p>가고 싶은 곳을 주머니에 담으면, 가장 편한 순서로!</p>
           {isLoadingPlaces ? (
-            <div className="planner-pocket-empty">
-              <LoadingSpinner label="장소를 불러오는 중입니다." />
-            </div>
+            <SkeletonLoader variant="pocket" label="장소를 불러오는 중입니다." />
           ) : places.length === 0 ? (
             <div className="planner-pocket-empty" role="status">
               <strong>아직 담은 장소가 없습니다.</strong>
@@ -1309,6 +1320,7 @@ function PlannerPage() {
                     }}
                   >
                     <div className="planner-place-thumb" aria-hidden="true">
+                      {place.photoUrl && <img src={place.photoUrl} alt="" />}
                       <span>{index + 1}</span>
                     </div>
                     <div className="planner-place-copy">
@@ -1722,6 +1734,21 @@ function PlannerPage() {
           </p>
         </aside>
       </div>
+      {isConfirmingClear && (
+        <div className="confirm-overlay">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-places-title">
+            <p id="clear-places-title">정말 비우시겠습니까?</p>
+            <div>
+              <button type="button" onClick={() => setIsConfirmingClear(false)}>
+                아니요
+              </button>
+              <button type="button" className="is-confirm" onClick={() => void handleClearPlaces()}>
+                네
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
