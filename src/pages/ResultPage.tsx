@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { getItinerary, saveItinerary, travelMinutes } from '../api/itinerary'
 import { getPlan, markPlanSaved } from '../api/plans'
 import { getPlaces } from '../api/places'
+import LoadingSpinner from '../components/LoadingSpinner'
 import MapsProvider from '../components/MapsProvider'
 import ResultMap, { dayColorNameOf, dayColorOf, dayColors, dayRoutesFrom } from '../components/ResultMap'
 import { findRegion } from '../data/destinations'
@@ -213,7 +214,7 @@ function ResultPage() {
   if (isLoading) {
     return (
       <section className="result-page">
-        <p className="result-status">여행 결과를 불러오는 중입니다.</p>
+        <LoadingSpinner size="page" label="여행 결과를 불러오는 중입니다." />
       </section>
     )
   }

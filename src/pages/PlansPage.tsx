@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getPlans } from '../api/plans'
 import { getPlaceCount } from '../api/places'
+import LoadingSpinner from '../components/LoadingSpinner'
 import PlanCard from '../components/PlanCard'
 import planArrow from '../assets/plan-arrow.svg'
 import planCloud from '../assets/plan-cloud.svg'
@@ -91,7 +92,7 @@ function PlansPage() {
         <p>최근 수정순</p>
       </div>
       <div className="plans-list-items">
-        {isLoadingPlans && <p>여행 계획을 불러오는 중입니다.</p>}
+        {isLoadingPlans && <LoadingSpinner label="여행 계획을 불러오는 중입니다." />}
         {listError && (
           <p className="login-error" role="alert">
             {listError}

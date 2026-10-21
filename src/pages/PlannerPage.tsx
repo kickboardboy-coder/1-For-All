@@ -17,6 +17,7 @@ import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
+import LoadingSpinner from '../components/LoadingSpinner'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
@@ -1287,7 +1288,7 @@ function PlannerPage() {
           <p>가고 싶은 곳을 주머니에 담으면, 가장 편한 순서로!</p>
           {isLoadingPlaces ? (
             <div className="planner-pocket-empty">
-              <p>장소를 불러오는 중입니다.</p>
+              <LoadingSpinner label="장소를 불러오는 중입니다." />
             </div>
           ) : places.length === 0 ? (
             <div className="planner-pocket-empty" role="status">
