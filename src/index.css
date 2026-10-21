@@ -1859,6 +1859,70 @@ body {
   text-decoration: none;
 }
 
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  text-align: center;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.error-boundary-code {
+  margin: 0;
+  color: #27846e;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.error-boundary h1 {
+  margin: 16px 0 0;
+  color: #243d37;
+  font-size: 28px;
+}
+
+.error-boundary p {
+  margin: 12px 0 0;
+  color: #7a8983;
+  font-size: 15px;
+}
+
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.error-boundary-actions button,
+.error-boundary-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.error-boundary-actions button {
+  border: 1px solid #e4ebe7;
+  background: #fff;
+  color: #243d37;
+}
+
+.error-boundary-actions a {
+  background: #1f6f5b;
+  color: #fff;
+}
+
 .login-panel {
   display: flex;
   width: min(100%, 1120px);
