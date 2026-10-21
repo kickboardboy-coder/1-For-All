@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { getPlans } from '../api/plans'
 import { getPlaceCount } from '../api/places'
+import EmptyState from '../components/EmptyState'
 import PlanCard from '../components/PlanCard'
 import SkeletonLoader from '../components/SkeletonLoader'
 import planArrow from '../assets/plan-arrow.svg'
@@ -106,7 +107,15 @@ function PlansPage() {
             {listError}
           </p>
         )}
-        {!isLoadingPlans && !listError && plans.length === 0 && <p>저장된 여행 계획이 없습니다.</p>}
+        {!isLoadingPlans && !listError && plans.length === 0 && (
+          <EmptyState
+            icon={planCloud}
+            title="저장된 여행 계획이 없습니다"
+            description="가고 싶은 곳만 담으면, 동선은 의쉬행이 정리해요."
+            actionLabel="새 여행 계획 만들기"
+            onAction={() => navigate('/planner/new')}
+          />
+        )}
         {plans.map((plan, index) => (
           <PlanCard key={plan.id} plan={plan} isRecent={index === 0} placeCount={placeCounts[plan.id] ?? 0} />
         ))}

@@ -17,6 +17,7 @@ import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
+import EmptyState from '../components/EmptyState'
 import SkeletonLoader from '../components/SkeletonLoader'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
@@ -1271,9 +1272,11 @@ function PlannerPage() {
           />
           <div className="planner-search-results-slot">
             {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-              <p className="planner-search-empty" role="status">
-                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-              </p>
+              <EmptyState
+                icon={plannerSearch}
+                title="검색 결과가 없습니다"
+                description="다른 이름이나 지역으로 다시 찾아 보세요."
+              />
             )}
             {searchResults.length > 0 && (
               <ul className="planner-search-results">

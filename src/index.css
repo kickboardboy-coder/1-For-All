@@ -998,10 +998,55 @@ body {
   opacity: 0.7;
 }
 
-.planner-search-empty {
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 168px;
+  padding: 24px 16px;
+  border-radius: 16px;
+  background: #f6f8f7;
+  color: #7a8983;
+  font-size: 12px;
+  text-align: center;
+}
+
+.empty-state img {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+.empty-state strong {
+  color: #243d37;
+  font-size: 14px;
+}
+
+.empty-state p {
   margin: 0;
-  color: #62766e;
+  line-height: 1.45;
+}
+
+.empty-state button {
+  margin-top: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #27846e;
+  color: #fff;
+  font: inherit;
   font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.planner-search-results-slot .empty-state {
+  height: 100%;
+  min-height: 0;
+  margin: 0;
 }
 
 .planner-search-results-slot {
