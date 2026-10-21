@@ -150,6 +150,39 @@ body {
   padding: 24px 32px;
 }
 
+.toast-host {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100% - 48px));
+  pointer-events: none;
+}
+
+.toast {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  box-shadow: 0 12px 32px rgb(36 61 55 / 16%);
+}
+
+.toast-success {
+  background: #243d37;
+  color: #fff;
+}
+
+.toast-error {
+  border: 1px solid #e8c4c1;
+  background: #fff;
+  color: #c4514a;
+}
+
 .loading-spinner {
   display: flex;
   flex-direction: column;

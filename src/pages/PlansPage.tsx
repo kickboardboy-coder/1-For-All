@@ -8,10 +8,12 @@ import planArrow from '../assets/plan-arrow.svg'
 import planCloud from '../assets/plan-cloud.svg'
 import planPlus from '../assets/plan-plus.svg'
 import planRoute from '../assets/plan-route.svg'
+import { useToast } from '../contexts/ToastContext'
 import type { Plan } from '../types/plan'
 
 function PlansPage() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [plans, setPlans] = useState<Plan[]>([])
   const [placeCounts, setPlaceCounts] = useState<Record<string, number>>({})
   const [isLoadingPlans, setIsLoadingPlans] = useState(true)
@@ -57,6 +59,12 @@ function PlansPage() {
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    if (listError) {
+      showToast(listError, 'error')
+    }
+  }, [listError, showToast])
 
   return (
     <section className="plans-page">

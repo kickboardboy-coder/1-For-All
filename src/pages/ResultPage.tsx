@@ -19,6 +19,7 @@ import plannerChevron from '../assets/planner-chevron.svg'
 import { itineraryStopBadge, type Itinerary, type ItineraryStop } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import type { Place } from '../types/place'
+import { useToast } from '../contexts/ToastContext'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 
 const weekdayLabel = ['일', '월', '화', '수', '목', '금', '토']
@@ -127,6 +128,7 @@ function formatDayDate(value: string) {
 function ResultPage() {
   const { planId } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [places, setPlaces] = useState<Place[]>([])
@@ -139,6 +141,12 @@ function ResultPage() {
   const [editError, setEditError] = useState('')
   const [dayColorIndexes, setDayColorIndexes] = useState<Record<number, number>>({})
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (editError) {
+      showToast(editError, 'error')
+    }
+  }, [editError, showToast])
 
   useEffect(() => {
     if (!planId) {
@@ -343,6 +351,7 @@ function ResultPage() {
       setItinerary(draft)
       setDraft(null)
       setIsEditing(false)
+      showToast('일정을 수정해 저장했어요.')
     } catch (saveError) {
       setEditError(saveError instanceof Error ? saveError.message : '일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
@@ -368,6 +377,7 @@ function ResultPage() {
 
       const savedAt = await markPlanSaved(planId)
       setPlan((current) => (current ? { ...current, savedAt, updatedAt: savedAt } : current))
+      showToast('여행 계획을 저장했어요.')
       navigate('/plans', { replace: true })
     } catch (saveError) {
       setEditError(saveError instanceof Error ? saveError.message : '계획을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')

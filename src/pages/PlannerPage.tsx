@@ -26,6 +26,7 @@ import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
+import { useToast } from '../contexts/ToastContext'
 import { placeRole } from '../utils/placeCategory'
 
 const searchDebounceMs = 400
@@ -168,6 +169,7 @@ const steps = [
 function PlannerPage() {
   const { planId } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState('')
   const [country, setCountry] = useState('')
@@ -240,6 +242,18 @@ function PlannerPage() {
     places.length === 0 ? '담은 장소' : null,
   ].filter((item): item is string => Boolean(item))
   const canOptimize = missingRequirements.length === 0
+
+  useEffect(() => {
+    if (error) {
+      showToast(error, 'error')
+    }
+  }, [error, showToast])
+
+  useEffect(() => {
+    if (optimizeError) {
+      showToast(optimizeError, 'error')
+    }
+  }, [optimizeError, showToast])
 
   useEffect(() => {
     if (!planId) {
@@ -617,6 +631,8 @@ function PlannerPage() {
         photoUrl: result.photoUrl,
       })
 
+      showToast('주머니에 담았어요.')
+
       if (planId) {
         setPlaces((current) => [...current, place].sort((left, right) => left.name.localeCompare(right.name, 'ko')))
         return place
@@ -657,6 +673,7 @@ function PlannerPage() {
       await deletePlace(planId, placeId)
       const nextPlaces = places.filter((place) => place.id !== placeId)
       setPlaces(nextPlaces)
+      showToast('주머니에서 빼 두었어요.')
 
       if (pinnedPlace?.id === placeId) {
         setPinnedPlace(null)
@@ -699,6 +716,7 @@ function PlannerPage() {
       await clearPlaces(planId)
       setPlaces([])
       setPinnedPlace(null)
+      showToast('주머니를 비웠어요.')
 
       if (lodging) {
         const updatedAt = await updatePlanLodging(planId, null)
@@ -750,6 +768,7 @@ function PlannerPage() {
       const updatedAt = await saveItinerary(nextItinerary)
       setItinerary(nextItinerary)
       setPlan((current) => (current ? { ...current, status: 'optimized', updatedAt } : current))
+      showToast('여행 일정을 만들었어요.')
       navigate(`/result/${planId}`, { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
@@ -771,6 +790,7 @@ function PlannerPage() {
 
     try {
       await touchPlan(planId)
+      showToast('담은 장소를 저장했어요.')
       navigate('/plans')
     } catch {
       setError('장소를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
