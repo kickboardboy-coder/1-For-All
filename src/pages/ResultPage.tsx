@@ -400,7 +400,7 @@ function ResultPage() {
               여행 주머니에 담기
               <img src={plannerChevron} alt="" />
             </li>
-            <li className="is-current">
+            <li className="is-current" aria-current="step">
               <span>3</span>
               계획 최적화
             </li>
@@ -510,13 +510,12 @@ function ResultPage() {
                         key={color}
                         type="button"
                         role="option"
+                        aria-label={dayColorNameOf(day, { [day]: index })}
                         aria-selected={dayColorOf(day, dayColorIndexes) === color}
                         className={dayColorOf(day, dayColorIndexes) === color ? 'is-selected' : undefined}
                         style={{ background: color }}
                         onClick={() => chooseDayColor(day, index)}
-                      >
-                        <span className="sr-only">{dayColorNameOf(day, { [day]: index })}</span>
-                      </button>
+                      />
                     ))}
                   </div>
                 )}

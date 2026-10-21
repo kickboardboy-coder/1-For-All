@@ -212,6 +212,7 @@ function PlannerPage() {
   const destinationMenu = useRef<HTMLDivElement>(null)
   const dayHoursMenu = useRef<HTMLDivElement>(null)
   const transitMenu = useRef<HTMLDivElement>(null)
+  const clearDialogCancelRef = useRef<HTMLButtonElement>(null)
   const dayHoursTouched = useRef(false)
   const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
@@ -404,6 +405,25 @@ function PlannerPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [openMenu])
+
+  useEffect(() => {
+    if (!isConfirmingClear) {
+      return
+    }
+
+    clearDialogCancelRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsConfirmingClear(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isConfirmingClear])
 
   useEffect(() => {
     if (openMenu !== 'dayStart' && openMenu !== 'dayEnd' && openMenu !== 'arrivalTime' && openMenu !== 'departureTime') {
@@ -1076,6 +1096,7 @@ function PlannerPage() {
               {step.number < 3 ? (
                 <button
                   type="button"
+                  aria-current={step.number === currentStep ? 'step' : undefined}
                   disabled={step.number === 1 ? !planId || currentStep === 1 : !planId || currentStep === 2}
                   onClick={() => {
                     if (step.number === 1) {
@@ -1092,10 +1113,10 @@ function PlannerPage() {
                   {step.label}
                 </button>
               ) : (
-                <>
+                <span aria-current={step.number === currentStep ? 'step' : undefined}>
                   <span>{step.number}</span>
                   {step.label}
-                </>
+                </span>
               )}
               {index < steps.length - 1 && <img src={plannerChevron} alt="" />}
             </li>
@@ -1116,6 +1137,8 @@ function PlannerPage() {
                 <button
                   type="button"
                   className="planner-country"
+                  aria-label="나라 선택"
+                  aria-haspopup="listbox"
                   aria-expanded={openMenu === 'country'}
                   disabled={currentStep !== 1}
                   onClick={() => setOpenMenu((current) => (current === 'country' ? null : 'country'))}
@@ -1130,6 +1153,7 @@ function PlannerPage() {
                       <li key={item.country}>
                         <button
                           type="button"
+                          role="option"
                           aria-selected={item.country === activeCountry}
                           onClick={() => {
                             setCountry(item.country)
@@ -1148,6 +1172,8 @@ function PlannerPage() {
                 <button
                   type="button"
                   className="planner-region"
+                  aria-label="지역 선택"
+                  aria-haspopup="listbox"
                   aria-expanded={openMenu === 'region'}
                   disabled={currentStep !== 1 || !activeCountry}
                   onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
@@ -1162,6 +1188,7 @@ function PlannerPage() {
                       <li key={item.name}>
                         <button
                           type="button"
+                          role="option"
                           aria-selected={item.name === activeRegion}
                           onClick={() => handleChooseRegion(item.name)}
                         >
@@ -1177,6 +1204,9 @@ function PlannerPage() {
                 <input
                   value={placeName}
                   placeholder="장소를 입력해 주세요"
+                  aria-label="장소 이름"
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? 'planner-search-error' : undefined}
                   disabled={!canSearch || editingDestination}
                   onChange={(event) => setPlaceName(event.target.value)}
                 />
@@ -1191,7 +1221,7 @@ function PlannerPage() {
               </button>
             )}
             {error && (
-              <p className="login-error" role="alert">
+              <p id="planner-search-error" className="login-error" role="alert">
                 {error}
               </p>
             )}
@@ -1336,6 +1366,8 @@ function PlannerPage() {
                   <button
                     type="button"
                     className={place.id === pinnedPlace?.id ? 'planner-place-item is-selected' : 'planner-place-item'}
+                    aria-label={`${place.name} 지도에서 보기`}
+                    aria-pressed={place.id === pinnedPlace?.id}
                     onClick={() => {
                       setPinnedPlace(asMapPlace(place))
                       setSelectedPlaceId(place.id)
@@ -1506,6 +1538,8 @@ function PlannerPage() {
                     aria-label="도착 시각"
                     aria-haspopup="listbox"
                     aria-expanded={openMenu === 'arrivalTime'}
+                    aria-invalid={sameDayTransitInvalid}
+                    aria-describedby={sameDayTransitInvalid ? 'planner-transit-time-error' : undefined}
                     disabled={isSavingSchedule || !arrivalForm.transport}
                     onClick={() => setOpenMenu((current) => (current === 'arrivalTime' ? null : 'arrivalTime'))}
                   >
@@ -1610,6 +1644,8 @@ function PlannerPage() {
                     aria-label="복귀 시각"
                     aria-haspopup="listbox"
                     aria-expanded={openMenu === 'departureTime'}
+                    aria-invalid={sameDayTransitInvalid}
+                    aria-describedby={sameDayTransitInvalid ? 'planner-transit-time-error' : undefined}
                     disabled={isSavingSchedule || !departureForm.transport}
                     onClick={() => setOpenMenu((current) => (current === 'departureTime' ? null : 'departureTime'))}
                   >
@@ -1636,7 +1672,11 @@ function PlannerPage() {
                   )}
                 </div>
               </div>
-              {sameDayTransitInvalid && <p className="planner-day-hours-note">당일치기는 도착 시각이 복귀 시각보다 빨라야 해요.</p>}
+              {sameDayTransitInvalid && (
+                <p id="planner-transit-time-error" className="planner-day-hours-note" role="alert">
+                  당일치기는 도착 시각이 복귀 시각보다 빨라야 해요.
+                </p>
+              )}
             </div>
             <div className="planner-day-hours" ref={dayHoursMenu}>
               <span>활동 시간</span>
@@ -1646,6 +1686,8 @@ function PlannerPage() {
                   aria-label="활동 시작"
                   aria-haspopup="listbox"
                   aria-expanded={openMenu === 'dayStart'}
+                  aria-invalid={dayHoursInvalid}
+                  aria-describedby={dayHoursInvalid ? 'planner-day-hours-error' : undefined}
                   disabled={isSavingSchedule}
                   onClick={() => setOpenMenu((current) => (current === 'dayStart' ? null : 'dayStart'))}
                 >
@@ -1678,6 +1720,8 @@ function PlannerPage() {
                   aria-label="활동 종료"
                   aria-haspopup="listbox"
                   aria-expanded={openMenu === 'dayEnd'}
+                  aria-invalid={dayHoursInvalid}
+                  aria-describedby={dayHoursInvalid ? 'planner-day-hours-error' : undefined}
                   disabled={isSavingSchedule}
                   onClick={() => setOpenMenu((current) => (current === 'dayEnd' ? null : 'dayEnd'))}
                 >
@@ -1704,7 +1748,11 @@ function PlannerPage() {
                 )}
               </div>
             </div>
-            {dayHoursInvalid && <p className="planner-day-hours-note">종료 시각은 시작 시각보다 늦어야 해요.</p>}
+            {dayHoursInvalid && (
+              <p id="planner-day-hours-error" className="planner-day-hours-note" role="alert">
+                종료 시각은 시작 시각보다 늦어야 해요.
+              </p>
+            )}
             <div className="planner-meals">
               <span>식사</span>
               {mealChoices.map((choice) => (
@@ -1762,7 +1810,7 @@ function PlannerPage() {
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-places-title">
             <p id="clear-places-title">정말 비우시겠습니까?</p>
             <div>
-              <button type="button" onClick={() => setIsConfirmingClear(false)}>
+              <button type="button" ref={clearDialogCancelRef} onClick={() => setIsConfirmingClear(false)}>
                 아니요
               </button>
               <button type="button" className="is-confirm" onClick={() => void handleClearPlaces()}>

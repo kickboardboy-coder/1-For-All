@@ -85,23 +85,33 @@ function SignUpPage() {
         <h1>쉬운 여행, 함께 시작해요</h1>
         <p className="login-lead">이메일과 비밀번호만 있으면 준비 끝이에요.</p>
         <form className="login-form" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <label className="login-field">
-            <span>이메일</span>
+          <div className="login-field">
+            <label htmlFor="signup-email">이메일</label>
             <input
+              id="signup-email"
               type="email"
               placeholder="이메일 주소를 입력해 주세요"
               autoComplete="email"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? 'signup-email-error' : undefined}
               {...register('email')}
             />
-            {errors.email && <p className="login-error">{errors.email.message}</p>}
-          </label>
-          <label className="login-field">
-            <span>비밀번호</span>
+            {errors.email && (
+              <p id="signup-email-error" className="login-error" role="alert">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
+          <div className="login-field">
+            <label htmlFor="signup-password">비밀번호</label>
             <span className="login-password">
               <input
+                id="signup-password"
                 type={showPassword ? 'text' : 'password'}
                 placeholder="비밀번호를 만들어 주세요"
                 autoComplete="new-password"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? 'signup-password-error signup-password-hint' : 'signup-password-hint'}
                 {...register('password')}
               />
               <button
@@ -113,16 +123,25 @@ function SignUpPage() {
                 <img src={eyeOff} alt="" />
               </button>
             </span>
-            <p className="signup-hint">영문, 숫자를 포함해 8자 이상 입력해 주세요.</p>
-            {errors.password && <p className="login-error">{errors.password.message}</p>}
-          </label>
-          <label className="login-field">
-            <span>비밀번호 확인</span>
+            <p id="signup-password-hint" className="signup-hint">
+              영문, 숫자를 포함해 8자 이상 입력해 주세요.
+            </p>
+            {errors.password && (
+              <p id="signup-password-error" className="login-error" role="alert">
+                {errors.password.message}
+              </p>
+            )}
+          </div>
+          <div className="login-field">
+            <label htmlFor="signup-password-confirm">비밀번호 확인</label>
             <span className="login-password">
               <input
+                id="signup-password-confirm"
                 type={showPasswordConfirm ? 'text' : 'password'}
                 placeholder="비밀번호를 한 번 더 입력해 주세요"
                 autoComplete="new-password"
+                aria-invalid={Boolean(errors.passwordConfirm)}
+                aria-describedby={errors.passwordConfirm ? 'signup-password-confirm-error' : undefined}
                 {...register('passwordConfirm')}
               />
               <button
@@ -135,17 +154,28 @@ function SignUpPage() {
               </button>
             </span>
             {errors.passwordConfirm && (
-              <p className="login-error">{errors.passwordConfirm.message}</p>
+              <p id="signup-password-confirm-error" className="login-error" role="alert">
+                {errors.passwordConfirm.message}
+              </p>
             )}
-          </label>
+          </div>
           <label className="signup-agree">
-            <input type="checkbox" {...register('agreed')} />
+            <input
+              type="checkbox"
+              aria-invalid={Boolean(errors.agreed)}
+              aria-describedby={errors.agreed ? 'signup-agreed-error' : undefined}
+              {...register('agreed')}
+            />
             <span>
               <span className="signup-agree-link">이용약관</span> 및{' '}
               <span className="signup-agree-link">개인정보 수집·이용</span>에 동의해요. (필수)
             </span>
           </label>
-          {errors.agreed && <p className="login-error">{errors.agreed.message}</p>}
+          {errors.agreed && (
+            <p id="signup-agreed-error" className="login-error" role="alert">
+              {errors.agreed.message}
+            </p>
+          )}
           {errors.root && (
             <p className="login-error login-form-error" role="alert">
               {errors.root.message}

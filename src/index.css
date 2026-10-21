@@ -5,6 +5,35 @@ body {
   font-family: sans-serif;
 }
 
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid #27846e;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  z-index: 80;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #27846e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-120%);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+
 .app-shell {
   min-height: 100vh;
   display: flex;
@@ -947,13 +976,24 @@ body {
   white-space: nowrap;
 }
 
+.planner-query:focus-within,
+.planner-lodging:focus-within,
+.planner-date:focus-within {
+  outline: 2px solid #27846e;
+  outline-offset: 2px;
+}
+
+.planner-time button[aria-invalid="true"],
+.planner-query input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px #c4514a;
+}
+
 .planner-query input {
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   font-size: 14px;
-  outline: none;
 }
 
 .planner-query input::placeholder {
@@ -1629,7 +1669,6 @@ body {
   font: inherit;
   font-size: 12px;
   font-weight: 500;
-  outline: none;
   cursor: pointer;
   appearance: none;
 }
@@ -2248,12 +2287,17 @@ body {
   width: 100%;
   box-sizing: border-box;
   padding: 16px 18px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 14px;
   background: #f3f6f4;
   color: #243d37;
   font: inherit;
   font-weight: 400;
+}
+
+.login-field input[aria-invalid="true"] {
+  border-color: #c4514a;
+  background: #fbf4f3;
 }
 
 .login-password {

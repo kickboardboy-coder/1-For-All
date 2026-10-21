@@ -7,8 +7,11 @@ function RootLayout() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main">
+        본문으로 건너뛰기
+      </a>
       <Navbar />
-      <main className="app-main">
+      <main id="main" className="app-main" tabIndex={-1}>
         <ErrorBoundary key={location.pathname}>
           <Outlet />
         </ErrorBoundary>

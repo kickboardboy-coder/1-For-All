@@ -68,23 +68,33 @@ function LoginPage() {
         <h1>다시 만나 반가워요!</h1>
         <p className="login-lead">로그인하고 나만의 여행을 이어가세요.</p>
         <form className="login-form" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <label className="login-field">
-            <span>이메일</span>
+          <div className="login-field">
+            <label htmlFor="login-email">이메일</label>
             <input
+              id="login-email"
               type="email"
               placeholder="이메일 주소를 입력해 주세요"
               autoComplete="email"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? 'login-email-error' : undefined}
               {...register('email')}
             />
-            {errors.email && <p className="login-error">{errors.email.message}</p>}
-          </label>
-          <label className="login-field">
-            <span>비밀번호</span>
+            {errors.email && (
+              <p id="login-email-error" className="login-error" role="alert">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
+          <div className="login-field">
+            <label htmlFor="login-password">비밀번호</label>
             <span className="login-password">
               <input
+                id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 placeholder="비밀번호를 입력해 주세요"
                 autoComplete="current-password"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? 'login-password-error' : undefined}
                 {...register('password')}
               />
               <button
@@ -96,8 +106,12 @@ function LoginPage() {
                 {showPassword ? '숨김' : '표시'}
               </button>
             </span>
-            {errors.password && <p className="login-error">{errors.password.message}</p>}
-          </label>
+            {errors.password && (
+              <p id="login-password-error" className="login-error" role="alert">
+                {errors.password.message}
+              </p>
+            )}
+          </div>
           <button type="button" className="login-forgot">
             비밀번호를 잊으셨나요?
           </button>
