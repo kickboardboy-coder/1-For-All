@@ -18,4 +18,5 @@ export type Place = {
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null
+  photoUrl: string | null
 }

@@ -17,6 +17,8 @@ import plannerSparkles from '../assets/planner-sparkles.svg'
 import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
+import EmptyState from '../components/EmptyState'
+import SkeletonLoader from '../components/SkeletonLoader'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
 import PlannerMap from '../components/PlannerMap'
@@ -25,6 +27,7 @@ import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
+import { useToast } from '../contexts/ToastContext'
 import { placeRole } from '../utils/placeCategory'
 
 const searchDebounceMs = 400
@@ -114,6 +117,7 @@ function asMapPlace(place: Place): PlaceSearchResult {
     breakTime: place.breakTime,
     iconUrl: null,
     iconBackgroundColor: null,
+    photoUrl: place.photoUrl,
   }
 }
 
@@ -166,6 +170,7 @@ const steps = [
 function PlannerPage() {
   const { planId } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState('')
   const [country, setCountry] = useState('')
@@ -201,11 +206,13 @@ function PlannerPage() {
   const [mapFocus, setMapFocus] = useState<'results' | 'place'>('results')
   const [isSearching, setIsSearching] = useState(false)
   const [emptySearchQuery, setEmptySearchQuery] = useState<string | null>(null)
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false)
   const searchTimer = useRef<number | null>(null)
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
   const dayHoursMenu = useRef<HTMLDivElement>(null)
   const transitMenu = useRef<HTMLDivElement>(null)
+  const clearDialogCancelRef = useRef<HTMLButtonElement>(null)
   const dayHoursTouched = useRef(false)
   const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
@@ -215,6 +222,8 @@ function PlannerPage() {
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
   const stayPlaces = places.filter((place) => place.category === 'stay')
+  const sightCount = places.filter((place) => placeRole(place) === 'sight').length
+  const foodCount = places.filter((place) => placeRole(place) === 'food').length
   const arrival = completeTransit(arrivalForm, places, savedArrival)
   const departure = completeTransit(departureForm, places, savedDeparture)
   const arrivalHubType = hubTypeOf(arrivalForm.transport)
@@ -235,6 +244,18 @@ function PlannerPage() {
     places.length === 0 ? '담은 장소' : null,
   ].filter((item): item is string => Boolean(item))
   const canOptimize = missingRequirements.length === 0
+
+  useEffect(() => {
+    if (error) {
+      showToast(error, 'error')
+    }
+  }, [error, showToast])
+
+  useEffect(() => {
+    if (optimizeError) {
+      showToast(optimizeError, 'error')
+    }
+  }, [optimizeError, showToast])
 
   useEffect(() => {
     if (!planId) {
@@ -384,6 +405,25 @@ function PlannerPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [openMenu])
+
+  useEffect(() => {
+    if (!isConfirmingClear) {
+      return
+    }
+
+    clearDialogCancelRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsConfirmingClear(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isConfirmingClear])
 
   useEffect(() => {
     if (openMenu !== 'dayStart' && openMenu !== 'dayEnd' && openMenu !== 'arrivalTime' && openMenu !== 'departureTime') {
@@ -609,7 +649,10 @@ function PlannerPage() {
         openingHours: result.openingHours,
         closedDays: result.closedDays,
         breakTime: result.breakTime,
+        photoUrl: result.photoUrl,
       })
+
+      showToast('주머니에 담았어요.')
 
       if (planId) {
         setPlaces((current) => [...current, place].sort((left, right) => left.name.localeCompare(right.name, 'ko')))
@@ -651,6 +694,7 @@ function PlannerPage() {
       await deletePlace(planId, placeId)
       const nextPlaces = places.filter((place) => place.id !== placeId)
       setPlaces(nextPlaces)
+      showToast('주머니에서 빼 두었어요.')
 
       if (pinnedPlace?.id === placeId) {
         setPinnedPlace(null)
@@ -685,6 +729,7 @@ function PlannerPage() {
       return
     }
 
+    setIsConfirmingClear(false)
     setIsUpdatingPlaces(true)
     setError('')
 
@@ -692,6 +737,7 @@ function PlannerPage() {
       await clearPlaces(planId)
       setPlaces([])
       setPinnedPlace(null)
+      showToast('주머니를 비웠어요.')
 
       if (lodging) {
         const updatedAt = await updatePlanLodging(planId, null)
@@ -743,6 +789,7 @@ function PlannerPage() {
       const updatedAt = await saveItinerary(nextItinerary)
       setItinerary(nextItinerary)
       setPlan((current) => (current ? { ...current, status: 'optimized', updatedAt } : current))
+      showToast('여행 일정을 만들었어요.')
       navigate(`/result/${planId}`, { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
@@ -764,6 +811,7 @@ function PlannerPage() {
 
     try {
       await touchPlan(planId)
+      showToast('담은 장소를 저장했어요.')
       navigate('/plans')
     } catch {
       setError('장소를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -1048,6 +1096,7 @@ function PlannerPage() {
               {step.number < 3 ? (
                 <button
                   type="button"
+                  aria-current={step.number === currentStep ? 'step' : undefined}
                   disabled={step.number === 1 ? !planId || currentStep === 1 : !planId || currentStep === 2}
                   onClick={() => {
                     if (step.number === 1) {
@@ -1064,10 +1113,10 @@ function PlannerPage() {
                   {step.label}
                 </button>
               ) : (
-                <>
+                <span aria-current={step.number === currentStep ? 'step' : undefined}>
                   <span>{step.number}</span>
                   {step.label}
-                </>
+                </span>
               )}
               {index < steps.length - 1 && <img src={plannerChevron} alt="" />}
             </li>
@@ -1088,6 +1137,8 @@ function PlannerPage() {
                 <button
                   type="button"
                   className="planner-country"
+                  aria-label="나라 선택"
+                  aria-haspopup="listbox"
                   aria-expanded={openMenu === 'country'}
                   disabled={currentStep !== 1}
                   onClick={() => setOpenMenu((current) => (current === 'country' ? null : 'country'))}
@@ -1102,6 +1153,7 @@ function PlannerPage() {
                       <li key={item.country}>
                         <button
                           type="button"
+                          role="option"
                           aria-selected={item.country === activeCountry}
                           onClick={() => {
                             setCountry(item.country)
@@ -1120,6 +1172,8 @@ function PlannerPage() {
                 <button
                   type="button"
                   className="planner-region"
+                  aria-label="지역 선택"
+                  aria-haspopup="listbox"
                   aria-expanded={openMenu === 'region'}
                   disabled={currentStep !== 1 || !activeCountry}
                   onClick={() => setOpenMenu((current) => (current === 'region' ? null : 'region'))}
@@ -1134,6 +1188,7 @@ function PlannerPage() {
                       <li key={item.name}>
                         <button
                           type="button"
+                          role="option"
                           aria-selected={item.name === activeRegion}
                           onClick={() => handleChooseRegion(item.name)}
                         >
@@ -1149,6 +1204,9 @@ function PlannerPage() {
                 <input
                   value={placeName}
                   placeholder="장소를 입력해 주세요"
+                  aria-label="장소 이름"
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? 'planner-search-error' : undefined}
                   disabled={!canSearch || editingDestination}
                   onChange={(event) => setPlaceName(event.target.value)}
                 />
@@ -1163,7 +1221,7 @@ function PlannerPage() {
               </button>
             )}
             {error && (
-              <p className="login-error" role="alert">
+              <p id="planner-search-error" className="login-error" role="alert">
                 {error}
               </p>
             )}
@@ -1244,9 +1302,11 @@ function PlannerPage() {
           />
           <div className="planner-search-results-slot">
             {!isSearching && !error && emptySearchQuery === placeName.trim() && (
-              <p className="planner-search-empty" role="status">
-                검색 결과가 없습니다. 다른 이름으로 다시 찾아 보세요.
-              </p>
+              <EmptyState
+                icon={plannerSearch}
+                title="검색 결과가 없습니다"
+                description="다른 이름이나 지역으로 다시 찾아 보세요."
+              />
             )}
             {searchResults.length > 0 && (
               <ul className="planner-search-results">
@@ -1278,17 +1338,22 @@ function PlannerPage() {
             <div>
               <img src={plannerBag} alt="" />
               <h2>여행 주머니</h2>
-              <span>{places.length}</span>
+              <span className="planner-pocket-count">{places.length}</span>
+              <span className="planner-pocket-mix">
+                관광지 {sightCount} · 맛집 {foodCount}
+              </span>
             </div>
-            <button type="button" disabled={!planId || places.length === 0 || isUpdatingPlaces} onClick={handleClearPlaces}>
+            <button
+              type="button"
+              disabled={!planId || places.length === 0 || isUpdatingPlaces}
+              onClick={() => setIsConfirmingClear(true)}
+            >
               전체 비우기
             </button>
           </div>
           <p>가고 싶은 곳을 주머니에 담으면, 가장 편한 순서로!</p>
           {isLoadingPlaces ? (
-            <div className="planner-pocket-empty">
-              <p>장소를 불러오는 중입니다.</p>
-            </div>
+            <SkeletonLoader variant="pocket" label="장소를 불러오는 중입니다." />
           ) : places.length === 0 ? (
             <div className="planner-pocket-empty" role="status">
               <strong>아직 담은 장소가 없습니다.</strong>
@@ -1301,6 +1366,8 @@ function PlannerPage() {
                   <button
                     type="button"
                     className={place.id === pinnedPlace?.id ? 'planner-place-item is-selected' : 'planner-place-item'}
+                    aria-label={`${place.name} 지도에서 보기`}
+                    aria-pressed={place.id === pinnedPlace?.id}
                     onClick={() => {
                       setPinnedPlace(asMapPlace(place))
                       setSelectedPlaceId(place.id)
@@ -1308,6 +1375,7 @@ function PlannerPage() {
                     }}
                   >
                     <div className="planner-place-thumb" aria-hidden="true">
+                      {place.photoUrl && <img src={place.photoUrl} alt="" />}
                       <span>{index + 1}</span>
                     </div>
                     <div className="planner-place-copy">
@@ -1470,6 +1538,8 @@ function PlannerPage() {
                     aria-label="도착 시각"
                     aria-haspopup="listbox"
                     aria-expanded={openMenu === 'arrivalTime'}
+                    aria-invalid={sameDayTransitInvalid}
+                    aria-describedby={sameDayTransitInvalid ? 'planner-transit-time-error' : undefined}
                     disabled={isSavingSchedule || !arrivalForm.transport}
                     onClick={() => setOpenMenu((current) => (current === 'arrivalTime' ? null : 'arrivalTime'))}
                   >
@@ -1574,6 +1644,8 @@ function PlannerPage() {
                     aria-label="복귀 시각"
                     aria-haspopup="listbox"
                     aria-expanded={openMenu === 'departureTime'}
+                    aria-invalid={sameDayTransitInvalid}
+                    aria-describedby={sameDayTransitInvalid ? 'planner-transit-time-error' : undefined}
                     disabled={isSavingSchedule || !departureForm.transport}
                     onClick={() => setOpenMenu((current) => (current === 'departureTime' ? null : 'departureTime'))}
                   >
@@ -1600,7 +1672,11 @@ function PlannerPage() {
                   )}
                 </div>
               </div>
-              {sameDayTransitInvalid && <p className="planner-day-hours-note">당일치기는 도착 시각이 복귀 시각보다 빨라야 해요.</p>}
+              {sameDayTransitInvalid && (
+                <p id="planner-transit-time-error" className="planner-day-hours-note" role="alert">
+                  당일치기는 도착 시각이 복귀 시각보다 빨라야 해요.
+                </p>
+              )}
             </div>
             <div className="planner-day-hours" ref={dayHoursMenu}>
               <span>활동 시간</span>
@@ -1610,6 +1686,8 @@ function PlannerPage() {
                   aria-label="활동 시작"
                   aria-haspopup="listbox"
                   aria-expanded={openMenu === 'dayStart'}
+                  aria-invalid={dayHoursInvalid}
+                  aria-describedby={dayHoursInvalid ? 'planner-day-hours-error' : undefined}
                   disabled={isSavingSchedule}
                   onClick={() => setOpenMenu((current) => (current === 'dayStart' ? null : 'dayStart'))}
                 >
@@ -1642,6 +1720,8 @@ function PlannerPage() {
                   aria-label="활동 종료"
                   aria-haspopup="listbox"
                   aria-expanded={openMenu === 'dayEnd'}
+                  aria-invalid={dayHoursInvalid}
+                  aria-describedby={dayHoursInvalid ? 'planner-day-hours-error' : undefined}
                   disabled={isSavingSchedule}
                   onClick={() => setOpenMenu((current) => (current === 'dayEnd' ? null : 'dayEnd'))}
                 >
@@ -1668,7 +1748,11 @@ function PlannerPage() {
                 )}
               </div>
             </div>
-            {dayHoursInvalid && <p className="planner-day-hours-note">종료 시각은 시작 시각보다 늦어야 해요.</p>}
+            {dayHoursInvalid && (
+              <p id="planner-day-hours-error" className="planner-day-hours-note" role="alert">
+                종료 시각은 시작 시각보다 늦어야 해요.
+              </p>
+            )}
             <div className="planner-meals">
               <span>식사</span>
               {mealChoices.map((choice) => (
@@ -1721,6 +1805,21 @@ function PlannerPage() {
           </p>
         </aside>
       </div>
+      {isConfirmingClear && (
+        <div className="confirm-overlay">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-places-title">
+            <p id="clear-places-title">정말 비우시겠습니까?</p>
+            <div>
+              <button type="button" ref={clearDialogCancelRef} onClick={() => setIsConfirmingClear(false)}>
+                아니요
+              </button>
+              <button type="button" className="is-confirm" onClick={() => void handleClearPlaces()}>
+                네
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

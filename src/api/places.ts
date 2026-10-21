@@ -22,6 +22,7 @@ type NewPlace = {
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null
+  photoUrl: string | null
 }
 
 function placesCollection(planId: string) {
@@ -53,6 +54,7 @@ function toPlace(id: string, planId: string, data: DocumentData): Place | null {
     openingHours: typeof data.openingHours === 'string' ? data.openingHours : null,
     closedDays: typeof data.closedDays === 'string' ? data.closedDays : null,
     breakTime: typeof data.breakTime === 'string' ? data.breakTime : null,
+    photoUrl: typeof data.photoUrl === 'string' ? data.photoUrl : null,
   }
 }
 
@@ -76,7 +78,7 @@ export async function getPlaceCount(planId: string): Promise<number> {
 
 export async function addPlace(
   planId: string,
-  { name, category, latitude, longitude, openingHours, closedDays, breakTime }: NewPlace,
+  { name, category, latitude, longitude, openingHours, closedDays, breakTime, photoUrl }: NewPlace,
 ): Promise<Place> {
   requireUser()
 
@@ -89,6 +91,7 @@ export async function addPlace(
     openingHours,
     closedDays,
     breakTime,
+    photoUrl,
   }
   const docRef = await addDoc(placesCollection(planId), place)
   await touchPlan(planId)

@@ -17,7 +17,7 @@ function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar-brand">
-        <Link to="/plans" className="navbar-brand-link">
+        <Link to="/plans" className="navbar-brand-link" aria-label="의쉬행 홈">
           <span className="navbar-mark">
             <img src={gnbLogo} alt="" />
           </span>

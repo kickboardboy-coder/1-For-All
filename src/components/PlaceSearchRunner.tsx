@@ -16,6 +16,7 @@ export type PlaceSearchResult = {
   breakTime: string | null
   iconUrl: string | null
   iconBackgroundColor: string | null
+  photoUrl: string | null
 }
 
 export type PlaceSearchType = 'airport' | 'train_station'
@@ -47,10 +48,25 @@ type SearchedPlace = {
   svgIconMaskURI?: string | null
   iconMaskBaseUri?: string | null
   iconBackgroundColor?: string | null
+  photos?: Array<{ getURI?: (options?: { maxWidth?: number; maxHeight?: number }) => string }> | null
 }
 
 function locationValue(value: number | (() => number)) {
   return typeof value === 'function' ? value() : value
+}
+
+function photoUrlOf(photos?: SearchedPlace['photos']) {
+  const photo = photos?.[0]
+
+  if (!photo || typeof photo.getURI !== 'function') {
+    return null
+  }
+
+  try {
+    return photo.getURI({ maxWidth: 240, maxHeight: 240 }) || null
+  } catch {
+    return null
+  }
 }
 
 function displayNameOf(value: SearchedPlace['displayName']) {
@@ -77,6 +93,7 @@ function asSearchedPlace(place: SearchedPlace) {
     svgIconMaskURI: place.svgIconMaskURI,
     iconMaskBaseUri: place.iconMaskBaseUri,
     iconBackgroundColor: place.iconBackgroundColor,
+    photos: place.photos,
   }
 }
 
@@ -140,6 +157,7 @@ export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | n
     breakTime: schedule.breakTime,
     iconUrl: place.svgIconMaskURI ?? (place.iconMaskBaseUri ? `${place.iconMaskBaseUri}.svg` : null),
     iconBackgroundColor: place.iconBackgroundColor ?? null,
+    photoUrl: photoUrlOf(place.photos),
   }
 }
 
@@ -165,7 +183,7 @@ function PlaceSearchRunner({ request, latitude, longitude, regionName, onSuccess
     const requestSearch = (withType: boolean) =>
       places.Place.searchByText({
         textQuery,
-        fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'primaryType', 'types', 'regularOpeningHours'],
+        fields: ['id', 'displayName', 'formattedAddress', 'location', 'rating', 'primaryType', 'types', 'regularOpeningHours', 'photos'],
         language: 'ko',
         region: 'KR',
         maxResultCount: 20,

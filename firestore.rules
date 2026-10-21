@@ -42,6 +42,7 @@ rules_version = '2';
 //   - openingHours: string (max 80) or null (required)
 //   - closedDays: string (max 80) or null (required)
 //   - breakTime: string (max 80) or null (required)
+//   - photoUrl: string (max 2000) or null - Google Places photo URI
 //
 // Subcollection: plans/{planId}/itinerary
 // Document ID: day-order, for example 01-00
@@ -201,7 +202,7 @@ service cloud.firestore {
     }
 
     function isValidPlace(planId) {
-      return request.resource.data.keys().hasOnly(['planId', 'name', 'latitude', 'longitude', 'category', 'openingHours', 'closedDays', 'breakTime'])
+      return request.resource.data.keys().hasOnly(['planId', 'name', 'latitude', 'longitude', 'category', 'openingHours', 'closedDays', 'breakTime', 'photoUrl'])
         && request.resource.data.planId == planId
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -215,7 +216,8 @@ service cloud.firestore {
         && request.resource.data.category in ['sight', 'food', 'stay']
         && isOptionalText(request.resource.data.openingHours)
         && isOptionalText(request.resource.data.closedDays)
-        && isOptionalText(request.resource.data.breakTime);
+        && isOptionalText(request.resource.data.breakTime)
+        && (!('photoUrl' in request.resource.data) || request.resource.data.photoUrl == null || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() > 0 && request.resource.data.photoUrl.size() <= 2000));
     }
 
     function isValidItineraryStop(planId) {
