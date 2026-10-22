@@ -13,6 +13,7 @@ import {
 import { auth, db } from '../firebase'
 import { touchPlan } from './plans'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
+import { effectiveClosedDays } from '../utils/placeSchedule'
 
 type NewPlace = {
   name: string
@@ -52,7 +53,10 @@ function toPlace(id: string, planId: string, data: DocumentData): Place | null {
     longitude: typeof data.longitude === 'number' ? data.longitude : 0,
     category: data.category,
     openingHours: typeof data.openingHours === 'string' ? data.openingHours : null,
-    closedDays: typeof data.closedDays === 'string' ? data.closedDays : null,
+    closedDays: effectiveClosedDays(
+      typeof data.openingHours === 'string' ? data.openingHours : null,
+      typeof data.closedDays === 'string' ? data.closedDays : null,
+    ),
     breakTime: typeof data.breakTime === 'string' ? data.breakTime : null,
     photoUrl: typeof data.photoUrl === 'string' ? data.photoUrl : null,
   }

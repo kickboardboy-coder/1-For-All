@@ -18,6 +18,7 @@ import { getItinerary, requestItinerary, saveItinerary } from '../api/itinerary'
 import { getPlan, savePlan, touchPlan, transitFromPlan, updatePlanDayHours, updatePlanDestination, updatePlanLodging, updatePlanMeals, updatePlanSchedule, updatePlanTransit, transitModeLabel, transitModes, type PlanLodging, type PlanMeals, type PlanTransit, type TransitMode } from '../api/plans'
 import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import EmptyState from '../components/EmptyState'
+import OptimizeWait from '../components/OptimizeWait'
 import SkeletonLoader from '../components/SkeletonLoader'
 import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
 import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
@@ -29,6 +30,7 @@ import type { Plan } from '../types/plan'
 import { placeCategoryLabel, type Place } from '../types/place'
 import { useToast } from '../contexts/ToastContext'
 import { placeRole } from '../utils/placeCategory'
+import { countTripMeals, countTripSights } from '../utils/tripMeals'
 
 const searchDebounceMs = 400
 const defaultDayStart = '09:00'
@@ -207,12 +209,14 @@ function PlannerPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [emptySearchQuery, setEmptySearchQuery] = useState<string | null>(null)
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
+  const [isConfirmingOptimize, setIsConfirmingOptimize] = useState(false)
   const searchTimer = useRef<number | null>(null)
   const mapsStatus = useRef<'ready' | 'missing' | 'failed'>('missing')
   const destinationMenu = useRef<HTMLDivElement>(null)
   const dayHoursMenu = useRef<HTMLDivElement>(null)
   const transitMenu = useRef<HTMLDivElement>(null)
   const clearDialogCancelRef = useRef<HTMLButtonElement>(null)
+  const optimizeDialogCancelRef = useRef<HTMLButtonElement>(null)
   const dayHoursTouched = useRef(false)
   const mealsTouched = useRef(false)
   const activeCountry = country || plan?.country || ''
@@ -244,6 +248,30 @@ function PlannerPage() {
     places.length === 0 ? '담은 장소' : null,
   ].filter((item): item is string => Boolean(item))
   const canOptimize = missingRequirements.length === 0
+  const tripWindow =
+    nights !== null && arrival && departure && dayStart && dayEnd && dayStart < dayEnd
+      ? {
+          nights,
+          dayStart,
+          dayEnd,
+          arrivalTime: arrival.time,
+          departureTime: departure.time,
+        }
+      : null
+  const mealCount = tripWindow ? countTripMeals({ ...tripWindow, meals }) : 0
+  const sightNeed = tripWindow ? countTripSights(tripWindow) : 0
+  const needsMealWarning = mealCount > 0 && foodCount < mealCount
+  const needsSightWarning = sightNeed > 0 && sightCount < sightNeed
+  const needsOptimizeWarning = needsMealWarning || needsSightWarning
+  const sightShort = Math.max(0, sightNeed - sightCount)
+  const mealShort = Math.max(0, mealCount - foodCount)
+  const optimizeShortageTitle = [
+    needsSightWarning ? `관광지는 최소 ${sightShort}개` : null,
+    needsMealWarning ? `맛집은 최소 ${mealShort}개` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(', ')
+    .concat('가 부족합니다')
 
   useEffect(() => {
     if (error) {
@@ -424,6 +452,25 @@ function PlannerPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [isConfirmingClear])
+
+  useEffect(() => {
+    if (!isConfirmingOptimize) {
+      return
+    }
+
+    optimizeDialogCancelRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isOptimizing) {
+        setIsConfirmingOptimize(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isConfirmingOptimize, isOptimizing])
 
   useEffect(() => {
     if (openMenu !== 'dayStart' && openMenu !== 'dayEnd' && openMenu !== 'arrivalTime' && openMenu !== 'departureTime') {
@@ -762,11 +809,25 @@ function PlannerPage() {
     }
   }
 
-  async function handleOptimize() {
+  function handleOptimize() {
+    if (!canOptimize || isOptimizing) {
+      return
+    }
+
+    if (needsOptimizeWarning) {
+      setIsConfirmingOptimize(true)
+      return
+    }
+
+    void runOptimize()
+  }
+
+  async function runOptimize() {
     if (!canOptimize || !planId || nights === null || !startDate || !lodging || !arrival || !departure || !(dayStart && dayEnd && dayStart < dayEnd)) {
       return
     }
 
+    setIsConfirmingOptimize(false)
     setIsOptimizing(true)
     setOptimizeError('')
     setItinerary(null)
@@ -1092,11 +1153,14 @@ function PlannerPage() {
         </div>
         <ol className="planner-steps">
           {steps.map((step, index) => (
-            <li key={step.number} className={step.number === currentStep ? 'is-current' : undefined}>
+            <li
+              key={step.number}
+              className={step.number === currentStep ? 'is-current' : undefined}
+              aria-current={step.number === currentStep ? 'step' : undefined}
+            >
               {step.number < 3 ? (
                 <button
                   type="button"
-                  aria-current={step.number === currentStep ? 'step' : undefined}
                   disabled={step.number === 1 ? !planId || currentStep === 1 : !planId || currentStep === 2}
                   onClick={() => {
                     if (step.number === 1) {
@@ -1113,10 +1177,10 @@ function PlannerPage() {
                   {step.label}
                 </button>
               ) : (
-                <span aria-current={step.number === currentStep ? 'step' : undefined}>
+                <>
                   <span>{step.number}</span>
                   {step.label}
-                </span>
+                </>
               )}
               {index < steps.length - 1 && <img src={plannerChevron} alt="" />}
             </li>
@@ -1805,6 +1869,7 @@ function PlannerPage() {
           </p>
         </aside>
       </div>
+      {isOptimizing && <OptimizeWait />}
       {isConfirmingClear && (
         <div className="confirm-overlay">
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-places-title">
@@ -1815,6 +1880,29 @@ function PlannerPage() {
               </button>
               <button type="button" className="is-confirm" onClick={() => void handleClearPlaces()}>
                 네
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isConfirmingOptimize && nights !== null && (
+        <div className="confirm-overlay">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="optimize-meals-title" aria-describedby="optimize-meals-copy">
+            <p id="optimize-meals-title">{optimizeShortageTitle}</p>
+            <p id="optimize-meals-copy" className="confirm-dialog-copy">
+              최적화하면 비어 있는 일정이 생길 수 있습니다. 그래도 계속하시겠습니까?
+            </p>
+            <div>
+              <button
+                type="button"
+                ref={optimizeDialogCancelRef}
+                disabled={isOptimizing}
+                onClick={() => setIsConfirmingOptimize(false)}
+              >
+                아니요
+              </button>
+              <button type="button" className="is-confirm" disabled={isOptimizing} onClick={() => void runOptimize()}>
+                {isOptimizing ? '만드는 중' : '네'}
               </button>
             </div>
           </div>

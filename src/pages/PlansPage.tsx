@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { getPlans } from '../api/plans'
+import { deletePlan, getPlans } from '../api/plans'
 import { getPlaceCount } from '../api/places'
 import EmptyState from '../components/EmptyState'
 import PlanCard from '../components/PlanCard'
@@ -19,6 +19,9 @@ function PlansPage() {
   const [placeCounts, setPlaceCounts] = useState<Record<string, number>>({})
   const [isLoadingPlans, setIsLoadingPlans] = useState(true)
   const [listError, setListError] = useState('')
+  const [planToDelete, setPlanToDelete] = useState<Plan | null>(null)
+  const [isDeletingPlan, setIsDeletingPlan] = useState(false)
+  const deleteDialogCancelRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let ignore = false
@@ -66,6 +69,49 @@ function PlansPage() {
       showToast(listError, 'error')
     }
   }, [listError, showToast])
+
+  useEffect(() => {
+    if (!planToDelete) {
+      return
+    }
+
+    deleteDialogCancelRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isDeletingPlan) {
+        setPlanToDelete(null)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isDeletingPlan, planToDelete])
+
+  async function handleDeletePlan() {
+    if (!planToDelete || isDeletingPlan) {
+      return
+    }
+
+    setIsDeletingPlan(true)
+
+    try {
+      await deletePlan(planToDelete.id)
+      setPlans((current) => current.filter((plan) => plan.id !== planToDelete.id))
+      setPlaceCounts((current) => {
+        const next = { ...current }
+        delete next[planToDelete.id]
+        return next
+      })
+      showToast('여행 계획을 삭제했어요.')
+      setPlanToDelete(null)
+    } catch {
+      showToast('여행 계획을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error')
+    } finally {
+      setIsDeletingPlan(false)
+    }
+  }
 
   return (
     <section className="plans-page">
@@ -117,13 +163,40 @@ function PlansPage() {
           />
         )}
         {plans.map((plan, index) => (
-          <PlanCard key={plan.id} plan={plan} isRecent={index === 0} placeCount={placeCounts[plan.id] ?? 0} />
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            isRecent={index === 0}
+            placeCount={placeCounts[plan.id] ?? 0}
+            isDeleting={isDeletingPlan && planToDelete?.id === plan.id}
+            onDelete={setPlanToDelete}
+          />
         ))}
       </div>
       <p className="plans-note">
         <img src={planCloud} alt="" />
         저장한 계획은 언제든 이어서 만들 수 있어요.
       </p>
+      {planToDelete && (
+        <div className="confirm-overlay">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-plan-title">
+            <p id="delete-plan-title">{planToDelete.region} 계획을 삭제할까요?</p>
+            <div>
+              <button
+                type="button"
+                ref={deleteDialogCancelRef}
+                disabled={isDeletingPlan}
+                onClick={() => setPlanToDelete(null)}
+              >
+                아니요
+              </button>
+              <button type="button" className="is-confirm" disabled={isDeletingPlan} onClick={() => void handleDeletePlan()}>
+                {isDeletingPlan ? '삭제하는 중' : '네'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

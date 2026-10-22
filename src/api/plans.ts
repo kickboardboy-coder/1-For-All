@@ -8,6 +8,7 @@ import {
   query,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -392,4 +393,38 @@ export async function getPlans(): Promise<Plan[]> {
     const plan = toPlan(item.id, item.data())
     return plan ? [plan] : []
   })
+}
+
+export async function deletePlan(planId: string) {
+  const user = auth.currentUser
+
+  if (!user) {
+    throw new Error('로그인된 사용자가 없습니다.')
+  }
+
+  const planRef = doc(db, 'plans', planId)
+  const snapshot = await getDoc(planRef)
+
+  if (!snapshot.exists() || snapshot.data().userId !== user.uid) {
+    throw new Error('여행 계획을 삭제하지 못했습니다.')
+  }
+
+  const [places, itinerary] = await Promise.all([
+    getDocs(collection(db, 'plans', planId, 'places')),
+    getDocs(collection(db, 'plans', planId, 'itinerary')),
+  ])
+  const refs = [...places.docs.map((item) => item.ref), ...itinerary.docs.map((item) => item.ref), planRef]
+  const chunkSize = 400
+
+  for (let index = 0; index < refs.length; index += chunkSize) {
+    const batch = writeBatch(db)
+    refs.slice(index, index + chunkSize).forEach((ref) => batch.delete(ref))
+    await batch.commit()
+  }
+
+  try {
+    localStorage.removeItem(`euihang-day-colors:${planId}`)
+  } catch {
+    return
+  }
 }

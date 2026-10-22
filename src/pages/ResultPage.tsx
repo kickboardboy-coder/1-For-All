@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
-import { getItinerary, saveItinerary, travelMinutes } from '../api/itinerary'
-import { getPlan, markPlanSaved } from '../api/plans'
+import { driveSpeedKmh, getItinerary, saveItinerary, travelMinutes, walkSpeedKmh } from '../api/itinerary'
+import { getPlan, isTransitMode, markPlanSaved, transitModeLabel } from '../api/plans'
 import { getPlaces } from '../api/places'
 import SkeletonLoader from '../components/SkeletonLoader'
 import MapsProvider from '../components/MapsProvider'
@@ -10,19 +10,43 @@ import { findRegion } from '../data/destinations'
 import resultArrowLeft from '../assets/result-arrow-left.svg'
 import resultBookmark from '../assets/result-bookmark.svg'
 import resultCalendarDays from '../assets/result-calendar-days.svg'
-import resultBus from '../assets/result-bus.svg'
 import resultCoffee from '../assets/result-coffee.svg'
 import resultMap from '../assets/result-map.svg'
 import resultPencil from '../assets/result-pencil.svg'
-import resultTrain from '../assets/result-train.svg'
 import plannerChevron from '../assets/planner-chevron.svg'
-import { itineraryStopBadge, type Itinerary, type ItineraryStop } from '../types/itinerary'
+import { itineraryStopBadge, mealStopKinds, type Itinerary, type ItineraryStop, type ItineraryStopKind } from '../types/itinerary'
 import type { Plan } from '../types/plan'
-import type { Place } from '../types/place'
+import type { Place, PlaceCategory } from '../types/place'
 import { useToast } from '../contexts/ToastContext'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
+import { placeRole } from '../utils/placeCategory'
 
 const weekdayLabel = ['일', '월', '화', '수', '목', '금', '토']
+
+function slotGroup(kind: ItineraryStopKind) {
+  if (kind === 'visit') {
+    return 'visit' as const
+  }
+
+  if ((mealStopKinds as readonly ItineraryStopKind[]).includes(kind)) {
+    return 'meal' as const
+  }
+
+  return 'fixed' as const
+}
+
+function identityFitsGroup(identity: { name: string; category: PlaceCategory }, group: 'meal' | 'visit') {
+  const role = placeRole(identity)
+  return group === 'meal' ? role === 'food' : role === 'sight'
+}
+
+function canReorderStops(stops: ItineraryStop[], fromIndex: number, toIndex: number) {
+  const from = stops[fromIndex]
+  const to = stops[toIndex]
+  const group = from ? slotGroup(from.kind) : 'fixed'
+
+  return Boolean(from && to && group !== 'fixed' && slotGroup(to.kind) === group)
+}
 
 function cloneItinerary(itinerary: Itinerary): Itinerary {
   return {
@@ -37,7 +61,7 @@ function cloneItinerary(itinerary: Itinerary): Itinerary {
 function stopCoords(
   stop: ItineraryStop,
   places: Place[],
-  lodging: { placeId: string; latitude: number; longitude: number } | null,
+  extras: Array<{ placeId: string; latitude: number; longitude: number }>,
 ) {
   const place = places.find((item) => item.id === stop.placeId)
 
@@ -45,25 +69,22 @@ function stopCoords(
     return { latitude: place.latitude, longitude: place.longitude }
   }
 
-  if (lodging && stop.placeId === lodging.placeId) {
-    return { latitude: lodging.latitude, longitude: lodging.longitude }
-  }
-
-  return null
+  const extra = extras.find((item) => item.placeId === stop.placeId)
+  return extra ? { latitude: extra.latitude, longitude: extra.longitude } : null
 }
 
 function withTravelTimes(
   stops: ItineraryStop[],
   places: Place[],
-  lodging: { placeId: string; latitude: number; longitude: number } | null,
+  extras: Array<{ placeId: string; latitude: number; longitude: number }>,
 ) {
   return stops.map((stop, index) => {
     if (index === 0) {
       return { ...stop, travelMinutes: null }
     }
 
-    const from = stopCoords(stops[index - 1], places, lodging)
-    const to = stopCoords(stop, places, lodging)
+    const from = stopCoords(stops[index - 1], places, extras)
+    const to = stopCoords(stop, places, extras)
 
     if (!from || !to) {
       return stop
@@ -92,27 +113,56 @@ function formatDateRange(startDate: string | null, nights: number | null) {
   return `${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')}.${String(start.getDate()).padStart(2, '0')} (${startWeek}) – ${end.getMonth() + 1}.${end.getDate()} (${endWeek})`
 }
 
-function formatTravel(minutes: number | null) {
-  if (minutes === null) {
-    return null
-  }
-
-  if (minutes <= 0) {
-    return '바로 이동'
-  }
-
+function formatDuration(minutes: number) {
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
 
   if (hours > 0 && rest > 0) {
-    return `약 ${hours}시간 ${rest}분`
+    return `${hours}시간 ${rest}분`
   }
 
   if (hours > 0) {
-    return `약 ${hours}시간`
+    return `${hours}시간`
   }
 
-  return `약 ${rest}분`
+  return `${Math.max(1, rest)}분`
+}
+
+function formatTravelModes(
+  from: { latitude: number; longitude: number } | null,
+  to: { latitude: number; longitude: number } | null,
+) {
+  if (!from || !to) {
+    return null
+  }
+
+  return `도보 ${formatDuration(travelMinutes(from, to, walkSpeedKmh))} · 자동차 ${formatDuration(travelMinutes(from, to, driveSpeedKmh))}`
+}
+
+function formatKoreanTime(value: string) {
+  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+
+  if (!match) {
+    return value
+  }
+
+  const hour = Number(match[1])
+  const period = hour < 12 ? '오전' : '오후'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${period} ${hour12}:${match[2]}`
+}
+
+function transitCaption(kind: 'arrival' | 'departure', plan: Plan, stopTime: string) {
+  const transport = kind === 'arrival' ? plan.arrivalTransport : plan.departureTransport
+  const time = (kind === 'arrival' ? plan.arrivalTime : plan.departureTime) || stopTime
+  const clock = formatKoreanTime(time)
+  const mode = isTransitMode(transport) ? transitModeLabel[transport] : null
+
+  if (kind === 'arrival') {
+    return mode ? `${mode} 도착 · ${clock}` : `${clock} 도착`
+  }
+
+  return mode ? `${mode} 출발 · ${clock}` : `${clock} 출발`
 }
 
 function formatDayDate(value: string) {
@@ -141,6 +191,9 @@ function ResultPage() {
   const [editError, setEditError] = useState('')
   const [dayColorIndexes, setDayColorIndexes] = useState<Record<number, number>>({})
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null)
+  const [stopDrag, setStopDrag] = useState<{ day: number; from: number; over: number; pointerId: number } | null>(null)
+  const stopDragRef = useRef(stopDrag)
+  stopDragRef.current = stopDrag
 
   useEffect(() => {
     if (editError) {
@@ -256,7 +309,26 @@ function ResultPage() {
           longitude: plan.lodgingLongitude,
         }
       : null
-  const routes = dayRoutesFrom(schedule, places, lodging)
+  const arrivalHub =
+    plan.arrivalPlaceId && plan.arrivalPlaceName && plan.arrivalLatitude !== null && plan.arrivalLongitude !== null
+      ? {
+          placeId: plan.arrivalPlaceId,
+          name: plan.arrivalPlaceName,
+          latitude: plan.arrivalLatitude,
+          longitude: plan.arrivalLongitude,
+        }
+      : null
+  const departureHub =
+    plan.departurePlaceId && plan.departurePlaceName && plan.departureLatitude !== null && plan.departureLongitude !== null
+      ? {
+          placeId: plan.departurePlaceId,
+          name: plan.departurePlaceName,
+          latitude: plan.departureLatitude,
+          longitude: plan.departureLongitude,
+        }
+      : null
+  const mapHubs = [lodging, arrivalHub, departureHub].filter((item) => item !== null)
+  const routes = dayRoutesFrom(schedule, places, mapHubs)
     .map((route) => ({ ...route, color: dayColorOf(route.day, dayColorIndexes) }))
     .filter((route) => visibleDays.includes(route.day))
   const legendDays = scheduleDays.length > 0 ? scheduleDays.map((day) => day.day) : Array.from({ length: days }, (_, index) => index + 1)
@@ -317,25 +389,99 @@ function ResultPage() {
             return day
           }
 
-          return { ...day, stops: withTravelTimes(updater(day.stops), places, lodging) }
+          return { ...day, stops: withTravelTimes(updater(day.stops), places, mapHubs) }
         }),
       }
     })
   }
 
-  function moveStop(dayNumber: number, stopIndex: number, offset: number) {
-    updateDayStops(dayNumber, (stops) => {
-      const nextIndex = stopIndex + offset
+  function reorderStops(dayNumber: number, fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) {
+      return
+    }
 
-      if (nextIndex < 0 || nextIndex >= stops.length) {
+    updateDayStops(dayNumber, (stops) => {
+      if (toIndex < 0 || toIndex >= stops.length || !canReorderStops(stops, fromIndex, toIndex)) {
         return stops
       }
 
-      const next = [...stops]
-      const [moved] = next.splice(stopIndex, 1)
-      next.splice(nextIndex, 0, moved)
-      return next
+      const group = slotGroup(stops[fromIndex].kind)
+      const indexes = stops.flatMap((stop, index) => (slotGroup(stop.kind) === group ? [index] : []))
+      const fromPos = indexes.indexOf(fromIndex)
+      const toPos = indexes.indexOf(toIndex)
+
+      if (group === 'fixed' || fromPos < 0 || toPos < 0) {
+        return stops
+      }
+
+      const identities = indexes.map((index) => ({
+        placeId: stops[index].placeId,
+        name: stops[index].name,
+        category: stops[index].category,
+      }))
+      const [moved] = identities.splice(fromPos, 1)
+
+      if (!identityFitsGroup(moved, group) || identities.some((identity) => !identityFitsGroup(identity, group))) {
+        return stops
+      }
+
+      identities.splice(toPos, 0, moved)
+
+      return stops.map((stop, index) => {
+        const slot = indexes.indexOf(index)
+        return slot < 0 ? stop : { ...stop, ...identities[slot] }
+      })
     })
+  }
+
+  function startStopDrag(event: PointerEvent<HTMLButtonElement>, dayNumber: number, index: number) {
+    if (!isEditing || isSavingEdits) {
+      return
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setStopDrag({ day: dayNumber, from: index, over: index, pointerId: event.pointerId })
+  }
+
+  function moveStopDrag(event: PointerEvent<HTMLButtonElement>) {
+    const drag = stopDragRef.current
+
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return
+    }
+
+    const node = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-stop-index]')
+
+    if (!(node instanceof HTMLElement)) {
+      return
+    }
+
+    const dayNumber = Number(node.dataset.day)
+    const over = Number(node.dataset.stopIndex)
+    const stops = draft?.days.find((day) => day.day === drag.day)?.stops
+
+    if (
+      !stops ||
+      dayNumber !== drag.day ||
+      Number.isNaN(over) ||
+      over === drag.over ||
+      !canReorderStops(stops, drag.from, over)
+    ) {
+      return
+    }
+
+    setStopDrag({ ...drag, over })
+  }
+
+  function endStopDrag(event: PointerEvent<HTMLButtonElement>) {
+    const drag = stopDragRef.current
+
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return
+    }
+
+    reorderStops(drag.day, drag.from, drag.over)
+    setStopDrag(null)
   }
 
   async function finishEdit() {
@@ -539,12 +685,18 @@ function ResultPage() {
             </h2>
             <span>{isEditing ? '일정 수정 중' : '예시 일정'}</span>
           </div>
-          <p className="result-schedule-note">선택한 끼니는 매일 넣고, 이동 시간은 예상값이에요</p>
+          <p className="result-schedule-note">
+            {isEditing
+              ? '아침·점심·저녁은 맛집끼리, 관광지는 관광지끼리만 끌어 바꿔 보세요.'
+              : '선택한 끼니는 매일 넣고, 이동 시간은 예상값이에요'}
+          </p>
           {scheduleDays.length === 0 ? (
             <p className="result-status">저장된 일정이 없습니다.</p>
           ) : (
             scheduleDays.map((day) => {
-              const visits = day.stops.filter((stop) => stop.kind !== 'lodging')
+              const visits = day.stops.filter(
+                (stop) => stop.kind !== 'lodging' && stop.kind !== 'arrival' && stop.kind !== 'departure',
+              )
               const color = dayColorOf(day.day, dayColorIndexes)
               let visitNumber = 0
 
@@ -559,27 +711,41 @@ function ResultPage() {
                     {day.stops.map((stop, index) => {
                       const place = places.find((item) => item.id === stop.placeId)
                       const previous = day.stops[index - 1]
-                      const travel = formatTravel(stop.travelMinutes)
+                      const travel = previous
+                        ? formatTravelModes(stopCoords(previous, places, mapHubs), stopCoords(stop, places, mapHubs))
+                        : null
                       const isNamedStop = stop.kind !== 'visit'
                       const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)
 
                       return (
-                        <li key={`${stop.placeId}-${stop.startTime}-${index}`}>
+                        <li
+                          key={`${stop.placeId}-${stop.startTime}-${index}`}
+                          data-day={day.day}
+                          data-stop-index={index}
+                        >
                           {travel && (
                             <p className={index === 0 ? 'result-travel result-travel-start' : 'result-travel'}>
-                              <img src={index === 0 || previous?.kind === 'lodging' || previous?.kind === 'arrival' || stop.kind === 'departure' ? resultTrain : resultBus} alt="" />
-                              {previous ? `${previous.name}에서 이동 · ${travel}` : `이동 · ${travel}`}
+                              {previous ? `${previous.name}에서 이동 · ${travel}` : travel}
                             </p>
                           )}
-                          <div className={isNamedStop ? 'result-visit result-visit-stay' : 'result-visit'}>
+                          <div
+                            className={[
+                              isNamedStop ? 'result-visit result-visit-stay' : 'result-visit',
+                              isEditing ? 'is-editable' : '',
+                              stopDrag?.day === day.day && stopDrag.from === index ? 'is-dragging' : '',
+                              stopDrag?.day === day.day && stopDrag.over === index && stopDrag.from !== index ? 'is-drop-target' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                          >
                             <span style={{ background: color }}>{label}</span>
                             <div>
                               <strong>{stop.name}</strong>
                               <small>
                                 {stop.kind === 'arrival'
-                                  ? '여행지에 도착해 일정을 시작해요.'
+                                  ? transitCaption('arrival', plan, stop.startTime)
                                   : stop.kind === 'departure'
-                                    ? '여행지에서 출발해 일정을 마무리해요.'
+                                    ? transitCaption('departure', plan, stop.startTime)
                                     : place
                                       ? formatPlaceSchedule(place)
                                       : stop.kind === 'lodging'
@@ -588,24 +754,20 @@ function ResultPage() {
                               </small>
                             </div>
                             {isEditing && (
-                              <div className="result-visit-order">
-                                <button
-                                  type="button"
-                                  aria-label="위로 옮기기"
-                                  disabled={index === 0}
-                                  onClick={() => moveStop(day.day, index, -1)}
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label="아래로 옮기기"
-                                  disabled={index === day.stops.length - 1}
-                                  onClick={() => moveStop(day.day, index, 1)}
-                                >
-                                  ↓
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                className="result-visit-handle"
+                                aria-label={`${stop.name} 끌어 순서 바꾸기`}
+                                disabled={isSavingEdits}
+                                onPointerDown={(event) => startStopDrag(event, day.day, index)}
+                                onPointerMove={moveStopDrag}
+                                onPointerUp={endStopDrag}
+                                onPointerCancel={endStopDrag}
+                              >
+                                <span />
+                                <span />
+                                <span />
+                              </button>
                             )}
                           </div>
                         </li>
@@ -623,7 +785,7 @@ function ResultPage() {
         </aside>
       </div>
       <p className="result-disclaimer">
-        방문 시간과 이동 시간은 API로 검증되지 않은 예상값입니다. 실제 영업시간·휴무일·브레이크타임과 교통편은 방문 전 확인해 주세요.
+        도보·자동차 이동 시간은 두 장소 사이 직선 거리로 계산한 예상값입니다. 실제 영업시간·휴무일·브레이크타임과 교통편은 방문 전 확인해 주세요.
       </p>
     </section>
   )

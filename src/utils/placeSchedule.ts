@@ -35,9 +35,21 @@ function limited(value: string | null) {
   return value
 }
 
+export function effectiveClosedDays(openingHours: string | null, closedDays: string | null) {
+  if (openingHours === '24시간') {
+    return null
+  }
+
+  return closedDays
+}
+
 export function summarizeOpeningHours(periods: OpeningPeriod[] | undefined): PlaceSchedule {
   if (!periods || periods.length === 0) {
     return { openingHours: null, closedDays: null, breakTime: null }
+  }
+
+  if (periods.some((period) => !period.close)) {
+    return { openingHours: limited('24시간'), closedDays: null, breakTime: null }
   }
 
   const byDay: Array<Array<{ open: string; close: string | null }>> = Array.from({ length: 7 }, () => [])
@@ -95,9 +107,10 @@ export function summarizeOpeningHours(periods: OpeningPeriod[] | undefined): Pla
 }
 
 export function formatPlaceSchedule(schedule: PlaceSchedule) {
+  const closedDays = effectiveClosedDays(schedule.openingHours, schedule.closedDays)
   const parts = [
     schedule.openingHours ? `영업 ${schedule.openingHours}` : '',
-    schedule.closedDays ? `휴무 ${schedule.closedDays}` : '',
+    closedDays ? `휴무 ${closedDays}` : '',
     schedule.breakTime ? `브레이크 ${schedule.breakTime}` : '',
   ].filter(Boolean)
 
