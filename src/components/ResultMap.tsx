@@ -86,7 +86,7 @@ export function dayColorNameOf(day: number, indexes: Record<number, number> = {}
 export function dayRoutesFrom(
   itinerary: Itinerary | null,
   places: Place[],
-  lodging: Omit<RouteStop, 'label'> | null,
+  extras: Array<Omit<RouteStop, 'label'>> = [],
 ): DayRoute[] {
   if (!itinerary) {
     return []
@@ -96,12 +96,10 @@ export function dayRoutesFrom(
     let visitNumber = 0
     const stops = day.stops.flatMap((stop) => {
       const place = places.find((item) => item.id === stop.placeId)
-      const located =
-        place
-          ? { placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }
-          : lodging && stop.placeId === lodging.placeId
-            ? lodging
-            : null
+      const extra = extras.find((item) => item.placeId === stop.placeId)
+      const located = place
+        ? { placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }
+        : extra ?? null
 
       if (!located) {
         return []

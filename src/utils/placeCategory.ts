@@ -18,6 +18,21 @@ const stayTypes = new Set([
 
 const cafeTypes = new Set(['cafe', 'coffee_shop', 'cat_cafe', 'dog_cafe', 'coffee_stand', 'tea_house'])
 
+const groceryTypes = new Set([
+  'grocery_store',
+  'asian_grocery_store',
+  'supermarket',
+  'discount_supermarket',
+  'hypermarket',
+  'convenience_store',
+  'food_store',
+  'health_food_store',
+  'grocery_or_supermarket',
+  'market',
+  'farmers_market',
+  'butcher_shop',
+])
+
 const foodTypes = new Set([
   'restaurant',
   'bakery',
@@ -32,12 +47,20 @@ const foodTypes = new Set([
   'steak_house',
 ])
 
+function isCafeType(type: string) {
+  return cafeTypes.has(type) || type.endsWith('_cafe') || type.endsWith('_coffee_shop')
+}
+
+function isGroceryType(type: string) {
+  return groceryTypes.has(type) || type.endsWith('_grocery_store') || type.endsWith('_supermarket')
+}
+
 function categoryOf(type: string): PlaceCategory | null {
   if (stayTypes.has(type) || type.endsWith('_hotel') || type.endsWith('_lodging')) {
     return 'stay'
   }
 
-  if (cafeTypes.has(type) || type.endsWith('_cafe') || type.endsWith('_coffee_shop')) {
+  if (isCafeType(type) || isGroceryType(type)) {
     return 'sight'
   }
 
@@ -54,8 +77,12 @@ export function isCafeName(name: string) {
   )
 }
 
+export function isGroceryName(name: string) {
+  return /마트|슈퍼마켓|식료품|식품점|식자재|편의점|grocery|supermarket|hypermarket|convenience\s*store|상점/i.test(name)
+}
+
 export function placeRole(place: { name: string; category: PlaceCategory }): PlaceCategory {
-  if (place.category !== 'stay' && isCafeName(place.name)) {
+  if (place.category !== 'stay' && (isCafeName(place.name) || isGroceryName(place.name))) {
     return 'sight'
   }
 
@@ -72,7 +99,7 @@ export function categoryFromPlaceTypes(primaryType?: string | null, types?: stri
   }
 
   for (const type of all) {
-    if (cafeTypes.has(type) || type.endsWith('_cafe') || type.endsWith('_coffee_shop')) {
+    if (isCafeType(type) || isGroceryType(type)) {
       return 'sight'
     }
   }

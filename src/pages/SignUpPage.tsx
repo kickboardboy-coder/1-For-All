@@ -167,8 +167,14 @@ function SignUpPage() {
               {...register('agreed')}
             />
             <span>
-              <span className="signup-agree-link">이용약관</span> 및{' '}
-              <span className="signup-agree-link">개인정보 수집·이용</span>에 동의해요. (필수)
+              <Link className="signup-agree-link" to="/terms">
+                이용약관
+              </Link>{' '}
+              및{' '}
+              <Link className="signup-agree-link" to="/privacy">
+                개인정보 수집·이용
+              </Link>
+              에 동의해요. (필수)
             </span>
           </label>
           {errors.agreed && (

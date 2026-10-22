@@ -1,7 +1,6 @@
 import { Link, useNavigate } from 'react-router'
 import { logout } from '../api/auth'
 import gnbLogo from '../assets/gnb-logo.svg'
-import helpIcon from '../assets/help-icon.svg'
 import { useAuth } from '../contexts/AuthContext'
 
 function Navbar() {
@@ -35,10 +34,6 @@ function Navbar() {
             <span>{userLabel}</span>
           </p>
         )}
-        <div className="navbar-help">
-          <img src={helpIcon} alt="" />
-          <span>이용 방법</span>
-        </div>
         {isLoggedIn && (
           <button type="button" className="navbar-logout" onClick={handleLogout}>
             로그아웃

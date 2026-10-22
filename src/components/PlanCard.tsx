@@ -5,6 +5,8 @@ type PlanCardProps = {
   plan: Plan
   isRecent: boolean
   placeCount: number
+  isDeleting?: boolean
+  onDelete: (plan: Plan) => void
 }
 
 function formatPeriod(plan: Plan) {
@@ -57,23 +59,34 @@ function formatUpdatedAt(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일 수정`
 }
 
-function PlanCard({ plan, isRecent, placeCount }: PlanCardProps) {
+function PlanCard({ plan, isRecent, placeCount, isDeleting, onDelete }: PlanCardProps) {
   return (
-    <Link to={plan.status === 'optimized' ? `/result/${plan.id}` : `/planner/${plan.id}`} className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
-      <div className="plan-card-thumb" aria-hidden="true" />
-      <div className="plan-card-main">
-        <div className="plan-card-title">
-          <h2>{plan.region}</h2>
-          {isRecent && <span className="plan-badge plan-badge-recent">최근 계획</span>}
-          <span className={`plan-badge plan-badge-${plan.status}`}>{planStatusLabel[plan.status]}</span>
+    <article className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
+      <Link to={plan.status === 'optimized' ? `/result/${plan.id}` : `/planner/${plan.id}`} className="plan-card-open">
+        <div className="plan-card-thumb" aria-hidden="true" />
+        <div className="plan-card-main">
+          <div className="plan-card-title">
+            <h2>{plan.region}</h2>
+            {isRecent && <span className="plan-badge plan-badge-recent">최근 계획</span>}
+            <span className={`plan-badge plan-badge-${plan.status}`}>{planStatusLabel[plan.status]}</span>
+          </div>
+          <p>{formatPeriod(plan)}</p>
+          <p className="plan-card-places">담은 장소 {placeCount}곳</p>
         </div>
-        <p>{formatPeriod(plan)}</p>
-        <p className="plan-card-places">담은 장소 {placeCount}곳</p>
-      </div>
+      </Link>
       <div className="plan-card-side">
         <p>{formatUpdatedAt(plan.updatedAt)}</p>
+        <button
+          type="button"
+          className="plan-card-delete"
+          disabled={isDeleting}
+          aria-label={`${plan.region} 계획 삭제`}
+          onClick={() => onDelete(plan)}
+        >
+          삭제
+        </button>
       </div>
-    </Link>
+    </article>
   )
 }
 
