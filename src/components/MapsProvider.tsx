@@ -9,14 +9,10 @@ export function useMapsStatus() {
   return useContext(MapsStatusContext)
 }
 
-export function WhenMapsReady({ children }: MapsProviderProps) {
-  const status = useMapsStatus()
-
-  if (status !== 'ready') {
-    return null
-  }
-
-  return children
+export function mapsUnavailableMessage(status: Exclude<MapsStatus, 'ready'>) {
+  return status === 'missing'
+    ? '구글 지도 API 키를 설정해 주세요.'
+    : '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
 }
 
 type MapsProviderProps = {

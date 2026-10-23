@@ -18,10 +18,9 @@ import { itineraryStopBadge, mealStopKinds, type Itinerary, type ItineraryStop, 
 import type { Plan } from '../types/plan'
 import type { Place, PlaceCategory } from '../types/place'
 import { useToast } from '../contexts/ToastContext'
-import { formatPlaceSchedule } from '../utils/placeSchedule'
+import { formatKoreanTime } from '../utils/clock'
+import { formatPlaceSchedule, weekdayLabels } from '../utils/placeSchedule'
 import { placeRole } from '../utils/placeCategory'
-
-const weekdayLabel = ['일', '월', '화', '수', '목', '금', '토']
 
 function slotGroup(kind: ItineraryStopKind) {
   if (kind === 'visit') {
@@ -61,7 +60,7 @@ function cloneItinerary(itinerary: Itinerary): Itinerary {
 function stopCoords(
   stop: ItineraryStop,
   placeById: Map<string, Place>,
-  extras: Array<{ placeId: string; latitude: number; longitude: number }>,
+  extraById: Map<string, { latitude: number; longitude: number }>,
 ) {
   const place = placeById.get(stop.placeId)
 
@@ -69,22 +68,22 @@ function stopCoords(
     return { latitude: place.latitude, longitude: place.longitude }
   }
 
-  const extra = extras.find((item) => item.placeId === stop.placeId)
+  const extra = extraById.get(stop.placeId)
   return extra ? { latitude: extra.latitude, longitude: extra.longitude } : null
 }
 
 function withTravelTimes(
   stops: ItineraryStop[],
   placeById: Map<string, Place>,
-  extras: Array<{ placeId: string; latitude: number; longitude: number }>,
+  extraById: Map<string, { latitude: number; longitude: number }>,
 ) {
   return stops.map((stop, index) => {
     if (index === 0) {
       return { ...stop, travelMinutes: null }
     }
 
-    const from = stopCoords(stops[index - 1], placeById, extras)
-    const to = stopCoords(stop, placeById, extras)
+    const from = stopCoords(stops[index - 1], placeById, extraById)
+    const to = stopCoords(stop, placeById, extraById)
 
     if (!from || !to) {
       return stop
@@ -107,8 +106,8 @@ function formatDateRange(startDate: string | null, nights: number | null) {
 
   const end = new Date(start)
   end.setDate(start.getDate() + nights)
-  const startWeek = weekdayLabel[start.getDay()]
-  const endWeek = weekdayLabel[end.getDay()]
+  const startWeek = weekdayLabels[start.getDay()]
+  const endWeek = weekdayLabels[end.getDay()]
 
   return `${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')}.${String(start.getDate()).padStart(2, '0')} (${startWeek}) – ${end.getMonth() + 1}.${end.getDate()} (${endWeek})`
 }
@@ -139,19 +138,6 @@ function formatTravelModes(
   return `도보 ${formatDuration(travelMinutes(from, to, walkSpeedKmh))} · 자동차 ${formatDuration(travelMinutes(from, to, driveSpeedKmh))}`
 }
 
-function formatKoreanTime(value: string) {
-  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
-
-  if (!match) {
-    return value
-  }
-
-  const hour = Number(match[1])
-  const period = hour < 12 ? '오전' : '오후'
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12
-  return `${period} ${hour12}:${match[2]}`
-}
-
 function transitCaption(kind: 'arrival' | 'departure', plan: Plan, stopTime: string) {
   const transport = kind === 'arrival' ? plan.arrivalTransport : plan.departureTransport
   const time = (kind === 'arrival' ? plan.arrivalTime : plan.departureTime) || stopTime
@@ -172,7 +158,7 @@ function formatDayDate(value: string) {
     return value
   }
 
-  return `${date.getMonth() + 1}.${date.getDate()} (${weekdayLabel[date.getDay()]})`
+  return `${date.getMonth() + 1}.${date.getDate()} (${weekdayLabels[date.getDay()]})`
 }
 
 function ResultPage() {
@@ -347,6 +333,7 @@ function ResultPage() {
         }
       : null
   const mapHubs = [lodging, arrivalHub, departureHub].filter((item) => item !== null)
+  const extraById = new Map(mapHubs.map((item) => [item.placeId, item]))
   const routes = dayRoutesFrom(schedule, places, mapHubs)
     .map((route) => ({ ...route, color: dayColorOf(route.day, dayColorIndexes) }))
     .filter((route) => visibleDays.includes(route.day))
@@ -408,7 +395,7 @@ function ResultPage() {
             return day
           }
 
-          return { ...day, stops: withTravelTimes(updater(day.stops), placeById, mapHubs) }
+          return { ...day, stops: withTravelTimes(updater(day.stops), placeById, extraById) }
         }),
       }
     })
@@ -723,7 +710,7 @@ function ResultPage() {
                       const place = placeById.get(stop.placeId)
                       const previous = day.stops[index - 1]
                       const travel = previous
-                        ? formatTravelModes(stopCoords(previous, placeById, mapHubs), stopCoords(stop, placeById, mapHubs))
+                        ? formatTravelModes(stopCoords(previous, placeById, extraById), stopCoords(stop, placeById, extraById))
                         : null
                       const isNamedStop = stop.kind !== 'visit'
                       const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)

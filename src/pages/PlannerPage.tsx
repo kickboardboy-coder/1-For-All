@@ -20,10 +20,11 @@ import { addPlace, clearPlaces, deletePlace, getPlaces } from '../api/places'
 import EmptyState from '../components/EmptyState'
 import OptimizeWait from '../components/OptimizeWait'
 import SkeletonLoader from '../components/SkeletonLoader'
-import MapsProvider, { useMapsStatus, WhenMapsReady } from '../components/MapsProvider'
-import PlaceSearchRunner, { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
-import PlannerMap from '../components/PlannerMap'
+import MapsProvider, { mapsUnavailableMessage, useMapsStatus } from '../components/MapsProvider'
+import { type PlaceSearchResult, type PlaceSearchType } from '../components/PlaceSearchRunner'
+import { PlannerMapPanel } from '../components/PlannerMap'
 import { destinations, findRegion } from '../data/destinations'
+import { formatKoreanTime } from '../utils/clock'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 import type { Itinerary } from '../types/itinerary'
 import type { Plan } from '../types/plan'
@@ -208,19 +209,6 @@ const dayTimeOptions = Array.from({ length: 48 }, (_, index) => {
   return `${String(hour).padStart(2, '0')}:${minute}`
 })
 
-function formatKoreanTime(value: string) {
-  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
-
-  if (!match) {
-    return value
-  }
-
-  const hour = Number(match[1])
-  const period = hour < 12 ? '오전' : '오후'
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12
-  return `${period} ${String(hour12).padStart(2, '0')}:${match[2]}`
-}
-
 function timeChoices(value: string) {
   return dayTimeOptions.includes(value) ? dayTimeOptions : [...dayTimeOptions, value].sort()
 }
@@ -297,9 +285,27 @@ function PlannerPage() {
   const mapRegion = findRegion(activeCountry, activeRegion)
   const editingDestination = Boolean(planId) && currentStep === 1
   const days = nights === null ? null : nights + 1
-  const stayPlaces = places.filter((place) => place.category === 'stay')
-  const sightCount = places.filter((place) => placeRole(place) === 'sight').length
-  const foodCount = places.filter((place) => placeRole(place) === 'food').length
+  const { stayPlaces, sightCount, foodCount } = useMemo(() => {
+    const stayPlaces: Place[] = []
+    let sightCount = 0
+    let foodCount = 0
+
+    places.forEach((place) => {
+      if (place.category === 'stay') {
+        stayPlaces.push(place)
+      }
+
+      const role = placeRole(place)
+      if (role === 'sight') {
+        sightCount += 1
+      }
+      if (role === 'food') {
+        foodCount += 1
+      }
+    })
+
+    return { stayPlaces, sightCount, foodCount }
+  }, [places])
   const arrival = completeTransit(arrivalForm, places, savedArrival)
   const departure = completeTransit(departureForm, places, savedDeparture)
   const arrivalHubType = hubTypeOf(arrivalForm.transport)
@@ -646,15 +652,9 @@ function PlannerPage() {
       return
     }
 
-    if (mapsStatus.current === 'missing' || !import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+    if (mapsStatus.current !== 'ready') {
       setIsSearching(false)
-      setError('구글 지도 API 키를 설정해 주세요.')
-      return
-    }
-
-    if (mapsStatus.current === 'failed') {
-      setIsSearching(false)
-      setError('지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      setError(mapsUnavailableMessage(mapsStatus.current))
       return
     }
 
@@ -759,6 +759,21 @@ function PlannerPage() {
     }
   }
 
+  function planFields() {
+    const validHours = Boolean(dayStart && dayEnd && dayStart < dayEnd)
+
+    return {
+      country,
+      region,
+      nights,
+      startDate,
+      lodging,
+      dayStart: validHours ? dayStart : null,
+      dayEnd: validHours ? dayEnd : null,
+      meals,
+    }
+  }
+
   async function handleCreatePlan() {
     if (!country || !region) {
       setError('나라와 지역을 선택해 주세요.')
@@ -769,16 +784,7 @@ function PlannerPage() {
     setError('')
 
     try {
-      const nextPlan = await savePlan({
-        country,
-        region,
-        nights,
-        startDate,
-        lodging,
-        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
-        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
-        meals,
-      })
+      const nextPlan = await savePlan(planFields())
       navigate(`/planner/${nextPlan.id}`, { replace: true })
     } catch {
       setError('여행 계획을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -805,16 +811,7 @@ function PlannerPage() {
           return null
         }
 
-        const nextPlan = await savePlan({
-        country,
-        region,
-        nights,
-        startDate,
-        lodging,
-        dayStart: dayStart && dayEnd && dayStart < dayEnd ? dayStart : null,
-        dayEnd: dayStart && dayEnd && dayStart < dayEnd ? dayEnd : null,
-        meals,
-      })
+        const nextPlan = await savePlan(planFields())
         nextPlanId = nextPlan.id
       }
 
@@ -1380,14 +1377,13 @@ function PlannerPage() {
               </p>
             )}
           </form>
-          {canSearch && (
-            <WhenMapsReady>
-            <PlaceSearchRunner
-              request={searchRequest}
-              latitude={mapRegion?.latitude ?? null}
-              longitude={mapRegion?.longitude ?? null}
-              regionName={mapRegion?.name ?? plan?.region ?? null}
-              onSuccess={(query, results) => {
+          <PlannerMapPanel
+            placeSearch={{
+              request: canSearch ? searchRequest : null,
+              latitude: mapRegion?.latitude ?? null,
+              longitude: mapRegion?.longitude ?? null,
+              regionName: mapRegion?.name ?? plan?.region ?? null,
+              onSuccess: (query, results) => {
                 if (query !== placeName.trim()) {
                   return
                 }
@@ -1397,8 +1393,8 @@ function PlannerPage() {
                 setEmptySearchQuery(results.length === 0 ? query : null)
                 setMapFocus('results')
                 setIsSearching(false)
-              }}
-              onError={(query) => {
+              },
+              onError: (query) => {
                 if (query !== placeName.trim()) {
                   return
                 }
@@ -1408,32 +1404,29 @@ function PlannerPage() {
                 setEmptySearchQuery(null)
                 setIsSearching(false)
                 setError('장소를 검색하지 못했습니다. 지도 키에 Places API (New)가 허용돼 있는지 확인해 주세요.')
-              }}
-            />
-            <PlaceSearchRunner
-              request={hubRequest}
-              latitude={mapRegion?.latitude ?? null}
-              longitude={mapRegion?.longitude ?? null}
-              regionName={mapRegion?.name ?? (activeRegion || null)}
-              onSuccess={(query, results) => {
+              },
+            }}
+            hubSearch={{
+              request: canSearch ? hubRequest : null,
+              latitude: mapRegion?.latitude ?? null,
+              longitude: mapRegion?.longitude ?? null,
+              regionName: mapRegion?.name ?? (activeRegion || null),
+              onSuccess: (query, results) => {
                 if (!hubRequest || query !== hubRequest.query) {
                   return
                 }
 
                 setHubLists((current) => ({ ...current, [hubRequest.includedType]: results }))
-              }}
-              onError={(query) => {
+              },
+              onError: (query) => {
                 if (!hubRequest || query !== hubRequest.query) {
                   return
                 }
 
                 setHubLists((current) => ({ ...current, [hubRequest.includedType]: [] }))
                 setError('공항·기차역을 찾지 못했습니다. 잠시 후 다시 시도해 주세요.')
-              }}
-            />
-            </WhenMapsReady>
-          )}
-          <PlannerMap
+              },
+            }}
             latitude={mapRegion?.latitude ?? 20}
             longitude={mapRegion?.longitude ?? 0}
             zoom={mapRegion ? 12 : 2}

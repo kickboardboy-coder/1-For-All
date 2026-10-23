@@ -23,13 +23,13 @@ export type PlaceSearchResult = {
 
 export type PlaceSearchType = 'airport' | 'train_station'
 
-type PlaceSearchRequest = {
+export type PlaceSearchRequest = {
   id: number
   query: string
   includedType?: PlaceSearchType
 }
 
-type PlaceSearchRunnerProps = {
+export type PlaceSearchInput = {
   request: PlaceSearchRequest | null
   latitude: number | null
   longitude: number | null
@@ -82,27 +82,10 @@ function displayNameOf(value: SearchedPlace['displayName']) {
 const shownResultCount = 5
 const hubResultCount = 20
 
-function asSearchedPlace(place: SearchedPlace) {
-  return {
-    id: place.id,
-    displayName: place.displayName,
-    formattedAddress: place.formattedAddress,
-    location: place.location,
-    rating: place.rating,
-    primaryType: place.primaryType,
-    types: place.types,
-    regularOpeningHours: place.regularOpeningHours,
-    svgIconMaskURI: place.svgIconMaskURI,
-    iconMaskBaseUri: place.iconMaskBaseUri,
-    iconBackgroundColor: place.iconBackgroundColor,
-    photos: place.photos,
-  }
-}
-
 function namedResults(found: SearchedPlace[]) {
   return found
     .flatMap((place) => {
-      const result = toPlaceSearchResult(asSearchedPlace(place))
+      const result = toPlaceSearchResult(place)
       return result ? [result] : []
     })
     .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
@@ -166,7 +149,7 @@ export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | n
   }
 }
 
-function PlaceSearchRunner({ request, latitude, longitude, regionName, onSuccess, onError }: PlaceSearchRunnerProps) {
+export function usePlaceSearch({ request, latitude, longitude, regionName, onSuccess, onError }: PlaceSearchInput) {
   const places = useMapsLibrary('places')
   const onSuccessRef = useRef(onSuccess)
   const onErrorRef = useRef(onError)
@@ -233,8 +216,4 @@ function PlaceSearchRunner({ request, latitude, longitude, regionName, onSuccess
       ignore = true
     }
   }, [request, places, latitude, longitude, regionName])
-
-  return null
 }
-
-export default PlaceSearchRunner

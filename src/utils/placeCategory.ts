@@ -106,7 +106,7 @@ export function placeRole(place: {
   return fromTypes
 }
 
-export function categoryFromPlaceTypes(primaryType?: string | null, types?: string[] | null): PlaceCategory {
+function categoryFromPlaceTypes(primaryType?: string | null, types?: string[] | null): PlaceCategory {
   const all = [primaryType, ...(types ?? [])].filter((type): type is string => Boolean(type))
 
   for (const type of all) {

@@ -7,11 +7,12 @@ import {
   getDocs,
   orderBy,
   query,
-  writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { db } from '../firebase'
+import { commitBatched } from './batch'
 import { touchPlan } from './plans'
+import { requireUser } from './session'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
 import { googlePlaceTypes } from '../utils/placeCategory'
 import { effectiveClosedDays } from '../utils/placeSchedule'
@@ -38,12 +39,6 @@ function typesFromData(data: DocumentData) {
 
 function placesCollection(planId: string) {
   return collection(db, 'plans', planId, 'places')
-}
-
-function requireUser() {
-  if (!auth.currentUser) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
 }
 
 function isPlaceCategory(value: unknown): value is PlaceCategory {
@@ -136,8 +131,6 @@ export async function clearPlaces(planId: string) {
     return
   }
 
-  const batch = writeBatch(db)
-  snapshot.docs.forEach((item) => batch.delete(item.ref))
-  await batch.commit()
+  await commitBatched(snapshot.docs.map((item) => (batch) => batch.delete(item.ref)))
   await touchPlan(planId)
 }

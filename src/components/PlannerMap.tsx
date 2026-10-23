@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
-import { toPlaceSearchResult, type PlaceSearchResult } from './PlaceSearchRunner'
-import { useMapsStatus } from './MapsProvider'
+import { usePlaceSearch, toPlaceSearchResult, type PlaceSearchInput, type PlaceSearchResult } from './PlaceSearchRunner'
+import { mapsUnavailableMessage, useMapsStatus } from './MapsProvider'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
 import plannerClose from '../assets/planner-close.svg'
 
@@ -182,7 +182,7 @@ function PlannerMap({
       try {
         const { places: found } = await placesLibrary.Place.searchByText({
           textQuery: pinnedPlace.name,
-          fields: ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours', 'photos'],
+          fields: mapPlaceFields,
           language: 'ko',
           region: 'KR',
           maxResultCount: 1,
@@ -291,9 +291,7 @@ function PlannerMap({
     return (
       <div className="planner-map" role="alert">
         <p>
-          {status === 'missing'
-            ? '구글 지도 API 키를 설정해 주세요.'
-            : '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+          {mapsUnavailableMessage(status)}
         </p>
       </div>
     )
@@ -376,4 +374,12 @@ function PlannerMap({
   )
 }
 
-export default PlannerMap
+export function PlannerMapPanel({
+  placeSearch,
+  hubSearch,
+  ...mapProps
+}: PlannerMapProps & { placeSearch: PlaceSearchInput; hubSearch: PlaceSearchInput }) {
+  usePlaceSearch(placeSearch)
+  usePlaceSearch(hubSearch)
+  return <PlannerMap {...mapProps} />
+}

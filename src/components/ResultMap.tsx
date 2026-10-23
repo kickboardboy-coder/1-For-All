@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
-import { useMapsStatus } from './MapsProvider'
+import { mapsUnavailableMessage, useMapsStatus } from './MapsProvider'
 import { itineraryStopBadge, type Itinerary } from '../types/itinerary'
 import type { Place } from '../types/place'
 
@@ -92,11 +92,14 @@ export function dayRoutesFrom(
     return []
   }
 
+  const placeById = new globalThis.Map(places.map((place) => [place.id, place]))
+  const extraById = new globalThis.Map(extras.map((item) => [item.placeId, item]))
+
   return itinerary.days.flatMap((day) => {
     let visitNumber = 0
     const stops = day.stops.flatMap((stop) => {
-      const place = places.find((item) => item.id === stop.placeId)
-      const extra = extras.find((item) => item.placeId === stop.placeId)
+      const place = placeById.get(stop.placeId)
+      const extra = extraById.get(stop.placeId)
       const located = place
         ? { placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }
         : extra ?? null
@@ -182,9 +185,7 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
     return (
       <div className="result-map-canvas" role="alert">
         <p>
-          {status === 'missing'
-            ? '구글 지도 API 키를 설정해 주세요.'
-            : '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+          {mapsUnavailableMessage(status)}
         </p>
       </div>
     )

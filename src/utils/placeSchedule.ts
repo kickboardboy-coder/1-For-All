@@ -1,5 +1,4 @@
 export const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'] as const
-const dayLabels = weekdayLabels
 const textLimit = 80
 
 export type PlaceSchedule = {
@@ -67,7 +66,7 @@ export function summarizeOpeningHours(periods: OpeningPeriod[] | undefined): Pla
     })
   })
 
-  const closed = dayLabels.filter((_, day) => byDay[day].length === 0)
+  const closed = weekdayLabels.filter((_, day) => byDay[day].length === 0)
 
   if (closed.length === 7) {
     return { openingHours: null, closedDays: '매일', breakTime: null }

@@ -8,11 +8,12 @@ import {
   query,
   updateDoc,
   where,
-  writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { db } from '../firebase'
 import { planStatuses, type Plan, type PlanStatus } from '../types/plan'
+import { commitBatched } from './batch'
+import { requireUser } from './session'
 
 export type PlanLodging = {
   lodgingPlaceId: string
@@ -66,46 +67,24 @@ const emptyTransitFields = {
 }
 
 function transitFields(gate: 'arrival' | 'departure', transit: PlanTransit | null) {
-  if (!transit) {
-    if (gate === 'arrival') {
-      return {
-        arrivalTransport: null,
-        arrivalPlaceId: null,
-        arrivalPlaceName: null,
-        arrivalLatitude: null,
-        arrivalLongitude: null,
-        arrivalTime: null,
-      }
-    }
-
-    return {
-      departureTransport: null,
-      departurePlaceId: null,
-      departurePlaceName: null,
-      departureLatitude: null,
-      departureLongitude: null,
-      departureTime: null,
-    }
-  }
-
   if (gate === 'arrival') {
     return {
-      arrivalTransport: transit.transport,
-      arrivalPlaceId: transit.placeId,
-      arrivalPlaceName: transit.name,
-      arrivalLatitude: transit.latitude,
-      arrivalLongitude: transit.longitude,
-      arrivalTime: transit.time,
+      arrivalTransport: transit?.transport ?? null,
+      arrivalPlaceId: transit?.placeId ?? null,
+      arrivalPlaceName: transit?.name ?? null,
+      arrivalLatitude: transit?.latitude ?? null,
+      arrivalLongitude: transit?.longitude ?? null,
+      arrivalTime: transit?.time ?? null,
     }
   }
 
   return {
-    departureTransport: transit.transport,
-    departurePlaceId: transit.placeId,
-    departurePlaceName: transit.name,
-    departureLatitude: transit.latitude,
-    departureLongitude: transit.longitude,
-    departureTime: transit.time,
+    departureTransport: transit?.transport ?? null,
+    departurePlaceId: transit?.placeId ?? null,
+    departurePlaceName: transit?.name ?? null,
+    departureLatitude: transit?.latitude ?? null,
+    departureLongitude: transit?.longitude ?? null,
+    departureTime: transit?.time ?? null,
   }
 }
 
@@ -165,11 +144,7 @@ type NewPlan = {
 }
 
 export async function savePlan({ country, region, nights, startDate, lodging, dayStart, dayEnd, meals }: NewPlan): Promise<Plan> {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+  const user = requireUser()
 
   const plan = {
     userId: user.uid,
@@ -196,116 +171,53 @@ export async function savePlan({ country, region, nights, startDate, lodging, da
   return { id: docRef.id, ...plan }
 }
 
-export async function updatePlanDestination(planId: string, country: string, region: string) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+async function updatePlanFields(planId: string, fields: Record<string, unknown>) {
+  requireUser()
 
   const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { country, region, updatedAt })
+  await updateDoc(doc(db, 'plans', planId), { ...fields, updatedAt })
   return updatedAt
+}
+
+export async function updatePlanDestination(planId: string, country: string, region: string) {
+  return updatePlanFields(planId, { country, region })
 }
 
 export async function updatePlanSchedule(planId: string, nights: number | null, startDate: string | null) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { nights, startDate, updatedAt })
-  return updatedAt
+  return updatePlanFields(planId, { nights, startDate })
 }
 
 export async function updatePlanLodging(planId: string, lodging: PlanLodging | null) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), {
+  return updatePlanFields(planId, {
     lodgingPlaceId: lodging?.lodgingPlaceId ?? null,
     lodgingName: lodging?.lodgingName ?? null,
     lodgingLatitude: lodging?.lodgingLatitude ?? null,
     lodgingLongitude: lodging?.lodgingLongitude ?? null,
-    updatedAt,
   })
-  return updatedAt
 }
 
 export async function updatePlanDayHours(planId: string, dayStart: string | null, dayEnd: string | null) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { dayStart, dayEnd, updatedAt })
-  return updatedAt
+  return updatePlanFields(planId, { dayStart, dayEnd })
 }
 
 export async function updatePlanTransit(planId: string, gate: 'arrival' | 'departure', transit: PlanTransit | null) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { ...transitFields(gate, transit), updatedAt })
-  return updatedAt
+  return updatePlanFields(planId, transitFields(gate, transit))
 }
 
 export async function updatePlanMeals(planId: string, meals: PlanMeals) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { ...meals, updatedAt })
-  return updatedAt
+  return updatePlanFields(planId, { ...meals })
 }
 
 export async function markPlanSaved(planId: string) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+  requireUser()
 
   const savedAt = new Date().toISOString()
   await updateDoc(doc(db, 'plans', planId), { savedAt, updatedAt: savedAt })
   return savedAt
 }
 
-export async function markPlanOptimized(planId: string) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  const updatedAt = new Date().toISOString()
-  await updateDoc(doc(db, 'plans', planId), { status: 'optimized', updatedAt })
-  return updatedAt
-}
-
 export async function touchPlan(planId: string) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
-
-  await updateDoc(doc(db, 'plans', planId), { updatedAt: new Date().toISOString() })
+  await updatePlanFields(planId, {})
 }
 
 function isPlanStatus(value: unknown): value is PlanStatus {
@@ -357,11 +269,7 @@ function toPlan(id: string, data: DocumentData): Plan | null {
 }
 
 export async function getPlan(planId: string): Promise<Plan | null> {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+  const user = requireUser()
 
   const snapshot = await getDoc(doc(db, 'plans', planId))
 
@@ -379,11 +287,7 @@ export async function getPlan(planId: string): Promise<Plan | null> {
 }
 
 export async function getPlans(): Promise<Plan[]> {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+  const user = requireUser()
 
   const snapshot = await getDocs(
     query(collection(db, 'plans'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc')),
@@ -396,11 +300,7 @@ export async function getPlans(): Promise<Plan[]> {
 }
 
 export async function deletePlan(planId: string) {
-  const user = auth.currentUser
-
-  if (!user) {
-    throw new Error('로그인된 사용자가 없습니다.')
-  }
+  const user = requireUser()
 
   const planRef = doc(db, 'plans', planId)
   const snapshot = await getDoc(planRef)
@@ -414,13 +314,7 @@ export async function deletePlan(planId: string) {
     getDocs(collection(db, 'plans', planId, 'itinerary')),
   ])
   const refs = [...places.docs.map((item) => item.ref), ...itinerary.docs.map((item) => item.ref), planRef]
-  const chunkSize = 400
-
-  for (let index = 0; index < refs.length; index += chunkSize) {
-    const batch = writeBatch(db)
-    refs.slice(index, index + chunkSize).forEach((ref) => batch.delete(ref))
-    await batch.commit()
-  }
+  await commitBatched(refs.map((ref) => (batch) => batch.delete(ref)))
 
   try {
     localStorage.removeItem(`euihang-day-colors:${planId}`)
