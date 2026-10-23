@@ -1,11 +1,11 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { FirebaseError } from 'firebase/app'
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
-import { z } from 'zod'
-import { login } from '../api/auth'
-import LoginIntro from '../components/LoginIntro'
+import { zodResolver } from '@hookform/resolvers/zod';
+import { FirebaseError } from 'firebase/app';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
+import { z } from 'zod';
+import { login, sendPasswordReset } from '../api/auth';
+import LoginIntro from '../components/LoginIntro';
 
 const loginSchema = z.object({
   email: z.email('이메일 형식으로 입력해 주세요'),
@@ -15,13 +15,29 @@ const loginSchema = z.object({
     .min(8, '영문과 숫자를 포함해 8자 이상 입력해 주세요')
     .regex(/[A-Za-z]/, '영문과 숫자를 포함해 8자 이상 입력해 주세요')
     .regex(/\d/, '영문과 숫자를 포함해 8자 이상 입력해 주세요'),
-})
+});
 
-type LoginForm = z.infer<typeof loginSchema>
+type LoginForm = z.infer<typeof loginSchema>;
+
+function getResetErrorMessage(error: unknown) {
+  if (error instanceof FirebaseError && error.code === 'auth/network-request-failed') {
+    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (error instanceof FirebaseError && error.code === 'auth/too-many-requests') {
+    return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (error instanceof FirebaseError && error.code === 'auth/invalid-email') {
+    return '이메일 형식으로 입력해 주세요';
+  }
+
+  return '재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.';
+}
 
 function getLoginErrorMessage(error: unknown) {
   if (error instanceof FirebaseError && error.code === 'auth/network-request-failed') {
-    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   if (
@@ -31,33 +47,61 @@ function getLoginErrorMessage(error: unknown) {
       error.code === 'auth/wrong-password' ||
       error.code === 'auth/invalid-email')
   ) {
-    return '이메일 또는 비밀번호가 올바르지 않습니다.'
+    return '이메일 또는 비밀번호가 올바르지 않습니다.';
   }
 
-  return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
 }
 
 function LoginPage() {
-  const navigate = useNavigate()
-  const [showPassword, setShowPassword] = useState(false)
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetNote, setResetNote] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-  })
+  });
+  const [isResetting, setIsResetting] = useState(false);
 
-  async function onSubmit(values: LoginForm) {
-    clearErrors('root')
+  async function onForgotPassword() {
+    const parsed = z.email('이메일 형식으로 입력해 주세요').safeParse(getValues('email'));
+
+    if (!parsed.success) {
+      setResetNote(null);
+      setError('email', { message: '이메일 형식으로 입력해 주세요' });
+      return;
+    }
+
+    clearErrors('email');
+    clearErrors('root');
+    setResetNote(null);
+    setIsResetting(true);
 
     try {
-      await login(values)
-      navigate('/plans', { replace: true })
+      await sendPasswordReset(parsed.data);
+      setResetNote('비밀번호 재설정 메일을 보냈어요. 메일함을 확인해 주세요.');
     } catch (error) {
-      setError('root', { message: getLoginErrorMessage(error) })
+      setError('root', { message: getResetErrorMessage(error) });
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
+  async function onSubmit(values: LoginForm) {
+    clearErrors('root');
+    setResetNote(null);
+
+    try {
+      await login(values);
+      navigate('/plans', { replace: true });
+    } catch (error) {
+      setError('root', { message: getLoginErrorMessage(error) });
     }
   }
 
@@ -112,9 +156,14 @@ function LoginPage() {
               </p>
             )}
           </div>
-          <button type="button" className="login-forgot">
+          <button type="button" className="login-forgot" onClick={() => void onForgotPassword()} disabled={isResetting}>
             비밀번호를 잊으셨나요?
           </button>
+          {resetNote && (
+            <p className="login-reset-note" role="status">
+              {resetNote}
+            </p>
+          )}
           {errors.root && (
             <p className="login-error login-form-error" role="alert">
               {errors.root.message}
@@ -129,7 +178,7 @@ function LoginPage() {
         </p>
       </div>
     </section>
-  )
+  );
 }
 
-export default LoginPage
+export default LoginPage;

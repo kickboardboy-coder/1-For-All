@@ -1,27 +1,27 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 type ErrorBoundaryProps = {
-  children: ReactNode
-}
+  children: ReactNode;
+};
 
 type ErrorBoundaryState = {
-  hasError: boolean
-}
+  hasError: boolean;
+};
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false }
+  state: ErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true }
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(error, info.componentStack)
+    console.error(error, info.componentStack);
   }
 
   render() {
     if (!this.state.hasError) {
-      return this.props.children
+      return this.props.children;
     }
 
     return (
@@ -36,8 +36,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           <a href="/plans">여행 플랜으로 돌아가기</a>
         </div>
       </section>
-    )
+    );
   }
 }
 
-export default ErrorBoundary
+export default ErrorBoundary;

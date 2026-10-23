@@ -39,6 +39,8 @@ rules_version = '2';
 //   - latitude: number (required, -90 to 90)
 //   - longitude: number (required, -180 to 180)
 //   - category: string (required) - sight, food, or stay
+//   - primaryType: string (max 80) or null - Google Places primaryType
+//   - types: string list (max 40 tokens) - Google Places types
 //   - openingHours: string (max 80) or null (required)
 //   - closedDays: string (max 80) or null (required)
 //   - breakTime: string (max 80) or null (required)
@@ -201,8 +203,25 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= 80);
     }
 
+    function isGoogleTypeToken(value) {
+      return value is string && value.size() > 0 && value.size() <= 80;
+    }
+
+    function isGoogleTypeList(value) {
+      return value is list
+        && value.size() <= 40
+        && (value.size() == 0 || isGoogleTypeToken(value[0]))
+        && (value.size() < 2 || isGoogleTypeToken(value[1]))
+        && (value.size() < 3 || isGoogleTypeToken(value[2]))
+        && (value.size() < 4 || isGoogleTypeToken(value[3]))
+        && (value.size() < 5 || isGoogleTypeToken(value[4]))
+        && (value.size() < 6 || isGoogleTypeToken(value[5]))
+        && (value.size() < 7 || isGoogleTypeToken(value[6]))
+        && (value.size() < 8 || isGoogleTypeToken(value[7]));
+    }
+
     function isValidPlace(planId) {
-      return request.resource.data.keys().hasOnly(['planId', 'name', 'latitude', 'longitude', 'category', 'openingHours', 'closedDays', 'breakTime', 'photoUrl'])
+      return request.resource.data.keys().hasOnly(['planId', 'name', 'latitude', 'longitude', 'category', 'primaryType', 'types', 'openingHours', 'closedDays', 'breakTime', 'photoUrl'])
         && request.resource.data.planId == planId
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -214,6 +233,8 @@ service cloud.firestore {
         && request.resource.data.longitude >= -180
         && request.resource.data.longitude <= 180
         && request.resource.data.category in ['sight', 'food', 'stay']
+        && isOptionalText(request.resource.data.primaryType)
+        && isGoogleTypeList(request.resource.data.types)
         && isOptionalText(request.resource.data.openingHours)
         && isOptionalText(request.resource.data.closedDays)
         && isOptionalText(request.resource.data.breakTime)

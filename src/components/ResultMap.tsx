@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
-import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
-import { useMapsStatus } from './MapsProvider'
-import { itineraryStopBadge, type Itinerary } from '../types/itinerary'
-import type { Place } from '../types/place'
+import { useEffect } from 'react';
+import { Map, Marker, useMap } from '@vis.gl/react-google-maps';
+import { mapsUnavailableMessage, useMapsStatus } from './MapsProvider';
+import { itineraryStopBadge, type Itinerary } from '../types/itinerary';
+import type { Place } from '../types/place';
 
 export const dayColors = [
   '#27846e',
@@ -29,7 +29,7 @@ export const dayColors = [
   '#bc6c25',
   '#264653',
   '#e63946',
-]
+];
 export const dayColorNames = [
   '민트',
   '살구',
@@ -55,32 +55,32 @@ export const dayColorNames = [
   '호박',
   '먹색',
   '선홍',
-]
+];
 
 export type RouteStop = {
-  placeId: string
-  name: string
-  latitude: number
-  longitude: number
-  label: string
-}
+  placeId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  label: string;
+};
 
 export type DayRoute = {
-  day: number
-  color: string
-  stops: RouteStop[]
-}
+  day: number;
+  color: string;
+  stops: RouteStop[];
+};
 
 export function dayColorIndex(day: number, indexes: Record<number, number> = {}) {
-  return indexes[day] ?? (day - 1) % dayColors.length
+  return indexes[day] ?? (day - 1) % dayColors.length;
 }
 
 export function dayColorOf(day: number, indexes: Record<number, number> = {}) {
-  return dayColors[dayColorIndex(day, indexes)]
+  return dayColors[dayColorIndex(day, indexes)];
 }
 
 export function dayColorNameOf(day: number, indexes: Record<number, number> = {}) {
-  return dayColorNames[dayColorIndex(day, indexes)]
+  return dayColorNames[dayColorIndex(day, indexes)];
 }
 
 export function dayRoutesFrom(
@@ -89,47 +89,54 @@ export function dayRoutesFrom(
   extras: Array<Omit<RouteStop, 'label'>> = [],
 ): DayRoute[] {
   if (!itinerary) {
-    return []
+    return [];
   }
 
+  const placeById = new globalThis.Map(places.map((place) => [place.id, place]));
+  const extraById = new globalThis.Map(extras.map((item) => [item.placeId, item]));
+
   return itinerary.days.flatMap((day) => {
-    let visitNumber = 0
+    let visitNumber = 0;
     const stops = day.stops.flatMap((stop) => {
-      const place = places.find((item) => item.id === stop.placeId)
-      const extra = extras.find((item) => item.placeId === stop.placeId)
+      const place = placeById.get(stop.placeId);
+      const extra = extraById.get(stop.placeId);
       const located = place
         ? { placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }
-        : extra ?? null
+        : (extra ?? null);
 
       if (!located) {
-        return []
+        return [];
       }
 
-      const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)
-      return [{ ...located, label }]
-    })
+      const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber);
+      return [{ ...located, label }];
+    });
 
     if (stops.length === 0) {
-      return []
+      return [];
     }
 
-    return [{ day: day.day, color: dayColors[(day.day - 1) % dayColors.length], stops }]
-  })
+    return [{ day: day.day, color: dayColors[(day.day - 1) % dayColors.length], stops }];
+  });
 }
 
 function RouteLines({ routes }: { routes: DayRoute[] }) {
-  const map = useMap()
+  const map = useMap();
 
   useEffect(() => {
-    const Polyline = (window as Window & { google?: { maps?: { Polyline?: new (options: object) => { setMap: (value: null) => void } } } }).google?.maps?.Polyline
+    const Polyline = (
+      window as Window & {
+        google?: { maps?: { Polyline?: new (options: object) => { setMap: (value: null) => void } } };
+      }
+    ).google?.maps?.Polyline;
 
     if (!map || typeof Polyline !== 'function') {
-      return
+      return;
     }
 
     const lines = routes.flatMap((route) => {
       if (route.stops.length < 2) {
-        return []
+        return [];
       }
 
       const line = new Polyline({
@@ -140,54 +147,50 @@ function RouteLines({ routes }: { routes: DayRoute[] }) {
         strokeOpacity: 0.9,
         strokeWeight: 4,
         zIndex: route.day,
-      })
+      });
 
-      return [line]
-    })
+      return [line];
+    });
 
-    const points = routes.flatMap((route) => route.stops)
+    const points = routes.flatMap((route) => route.stops);
 
     if (points.length === 1) {
-      map.moveCamera({ center: { lat: points[0].latitude, lng: points[0].longitude }, zoom: 14 })
+      map.moveCamera({ center: { lat: points[0].latitude, lng: points[0].longitude }, zoom: 14 });
     } else if (points.length > 1) {
-      const latitudes = points.map((point) => point.latitude)
-      const longitudes = points.map((point) => point.longitude)
+      const latitudes = points.map((point) => point.latitude);
+      const longitudes = points.map((point) => point.longitude);
       map.fitBounds({
         north: Math.max(...latitudes),
         south: Math.min(...latitudes),
         east: Math.max(...longitudes),
         west: Math.min(...longitudes),
-      })
+      });
     }
 
     return () => {
-      lines.forEach((line) => line.setMap(null))
-    }
-  }, [map, routes])
+      lines.forEach((line) => line.setMap(null));
+    };
+  }, [map, routes]);
 
-  return null
+  return null;
 }
 
 type ResultMapProps = {
-  latitude: number
-  longitude: number
-  zoom: number
-  routes: DayRoute[]
-}
+  latitude: number;
+  longitude: number;
+  zoom: number;
+  routes: DayRoute[];
+};
 
 function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
-  const status = useMapsStatus()
+  const status = useMapsStatus();
 
   if (status !== 'ready') {
     return (
       <div className="result-map-canvas" role="alert">
-        <p>
-          {status === 'missing'
-            ? '구글 지도 API 키를 설정해 주세요.'
-            : '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}
-        </p>
+        <p>{mapsUnavailableMessage(status)}</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,11 +206,15 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
       >
         <RouteLines routes={routes} />
         {routes.flatMap((route) => {
-          const markers = route.stops.filter((stop, index) => stop.label !== '숙소' || route.stops.findIndex((item) => item.label === '숙소' && item.placeId === stop.placeId) === index)
+          const markers = route.stops.filter(
+            (stop, index) =>
+              stop.label !== '숙소' ||
+              route.stops.findIndex((item) => item.label === '숙소' && item.placeId === stop.placeId) === index,
+          );
 
           return markers.map((stop, index) => (
             <Marker
-              key={`${route.day}-${stop.placeId}-${stop.label}-${index}`}
+              key={`${route.day}-${stop.placeId}-${stop.label}`}
               position={{ lat: stop.latitude, lng: stop.longitude }}
               title={`${route.day}일차 · ${stop.label} ${stop.name}`}
               label={{
@@ -218,12 +225,12 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
               }}
               zIndex={route.day * 10 + index}
             />
-          ))
+          ));
         })}
       </Map>
-      <p>동선은 방문 순서를 이은 선이에요. 실제 길찾기 경로가 아니에요.</p>
+      <p className="result-map-note">동선은 방문 순서를 이은 선이에요. 실제 길찾기 경로가 아니에요.</p>
     </div>
-  )
+  );
 }
 
-export default ResultMap
+export default ResultMap;

@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link } from 'react-router';
 
 function NotFoundPage() {
   return (
@@ -10,7 +10,7 @@ function NotFoundPage() {
         여행 플랜으로 돌아가기
       </Link>
     </section>
-  )
+  );
 }
 
-export default NotFoundPage
+export default NotFoundPage;

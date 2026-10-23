@@ -1,29 +1,27 @@
-import { Link, useNavigate } from 'react-router'
-import { logout } from '../api/auth'
-import gnbLogo from '../assets/gnb-logo.svg'
-import { useAuth } from '../contexts/AuthContext'
+import { Link, useNavigate } from 'react-router';
+import { logout } from '../api/auth';
+import gnbLogo from '../assets/gnb-logo.svg';
+import { useAuth } from '../contexts/AuthContext';
 
 function Navbar() {
-  const navigate = useNavigate()
-  const { user, isLoggedIn } = useAuth()
-  const userLabel = user?.displayName || user?.email || '여행자님'
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const userLabel = user?.displayName || user?.email || '여행자님';
 
   async function handleLogout() {
-    await logout()
-    navigate('/login', { replace: true })
+    await logout();
+    navigate('/login', { replace: true });
   }
 
   return (
     <header className="navbar">
-      <div className="navbar-brand">
-        <Link to="/plans" className="navbar-brand-link" aria-label="의쉬행 홈">
-          <span className="navbar-mark">
-            <img src={gnbLogo} alt="" />
-          </span>
-          <span className="navbar-title">의외로 쉬운 여행</span>
-        </Link>
-        <p className="navbar-tagline">의쉬행 · 의외로 쉬운 여행, 의외로 쉬운 행복</p>
-      </div>
+      <Link to="/plans" className="navbar-brand-link" aria-label="의쉬행 홈">
+        <span className="navbar-mark">
+          <img src={gnbLogo} alt="" />
+        </span>
+        <span className="navbar-title">의외로 쉬운 여행</span>
+      </Link>
+      <p className="navbar-tagline">의쉬행 · 의외로 쉬운 여행, 의외로 쉬운 행복</p>
       <div className="navbar-actions">
         {isLoggedIn && (
           <p className="navbar-user">
@@ -41,7 +39,7 @@ function Navbar() {
         )}
       </div>
     </header>
-  )
+  );
 }
 
-export default Navbar
+export default Navbar;

@@ -1,10 +1,10 @@
 type SkeletonLoaderProps = {
-  label: string
-  variant: 'plans' | 'pocket' | 'result'
-}
+  label: string;
+  variant: 'plans' | 'pocket' | 'result';
+};
 
 function Bone({ className }: { className: string }) {
-  return <span className={`skeleton-bone ${className}`} aria-hidden="true" />
+  return <span className={`skeleton-bone ${className}`} aria-hidden="true" />;
 }
 
 function SkeletonLoader({ label, variant }: SkeletonLoaderProps) {
@@ -58,7 +58,7 @@ function SkeletonLoader({ label, variant }: SkeletonLoaderProps) {
       )}
       <span className="sr-only">{label}</span>
     </div>
-  )
+  );
 }
 
-export default SkeletonLoader
+export default SkeletonLoader;

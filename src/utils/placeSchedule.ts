@@ -1,150 +1,196 @@
-export const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'] as const
-const dayLabels = weekdayLabels
-const textLimit = 80
+export const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'] as const;
+const textLimit = 80;
 
 export type PlaceSchedule = {
-  openingHours: string | null
-  closedDays: string | null
-  breakTime: string | null
-}
+  openingHours: string | null;
+  closedDays: string | null;
+  breakTime: string | null;
+};
 
 type OpeningPoint = {
-  day?: number
-  hour?: number
-  minute?: number
-}
+  day?: number;
+  hour?: number;
+  minute?: number;
+};
 
 export type OpeningPeriod = {
-  open?: OpeningPoint
-  close?: OpeningPoint
-}
+  open?: OpeningPoint;
+  close?: OpeningPoint;
+};
 
 function withinLimit(value: string) {
-  return new TextEncoder().encode(value).length <= textLimit
+  return new TextEncoder().encode(value).length <= textLimit;
 }
 
 function formatClock(hour = 0, minute = 0) {
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function limited(value: string | null) {
   if (!value || !withinLimit(value)) {
-    return null
+    return null;
   }
 
-  return value
+  return value;
 }
 
 export function effectiveClosedDays(openingHours: string | null, closedDays: string | null) {
   if (openingHours === '24시간') {
-    return null
+    return null;
   }
 
-  return closedDays
+  return closedDays;
 }
 
 export function summarizeOpeningHours(periods: OpeningPeriod[] | undefined): PlaceSchedule {
   if (!periods || periods.length === 0) {
-    return { openingHours: null, closedDays: null, breakTime: null }
+    return { openingHours: null, closedDays: null, breakTime: null };
   }
 
   if (periods.some((period) => !period.close)) {
-    return { openingHours: limited('24시간'), closedDays: null, breakTime: null }
+    return { openingHours: limited('24시간'), closedDays: null, breakTime: null };
   }
 
-  const byDay: Array<Array<{ open: string; close: string | null }>> = Array.from({ length: 7 }, () => [])
+  const byDay: Array<Array<{ open: string; close: string | null }>> = Array.from({ length: 7 }, () => []);
 
   periods.forEach((period) => {
-    const day = period.open?.day
+    const day = period.open?.day;
 
     if (day === undefined || day < 0 || day > 6) {
-      return
+      return;
     }
 
     byDay[day].push({
       open: formatClock(period.open?.hour, period.open?.minute),
       close: period.close ? formatClock(period.close.hour, period.close.minute) : null,
-    })
-  })
+    });
+  });
 
-  const closed = dayLabels.filter((_, day) => byDay[day].length === 0)
+  const closed = weekdayLabels.filter((_, day) => byDay[day].length === 0);
 
   if (closed.length === 7) {
-    return { openingHours: null, closedDays: '매일', breakTime: null }
+    return { openingHours: null, closedDays: '매일', breakTime: null };
   }
 
-  const ranges: string[] = []
-  const breaks: string[] = []
+  const ranges: string[] = [];
+  const breaks: string[] = [];
 
   byDay.forEach((day) => {
     if (day.length === 0) {
-      return
+      return;
     }
 
-    const ordered = [...day].sort((left, right) => left.open.localeCompare(right.open))
-    const lastClose = ordered[ordered.length - 1].close
-    ranges.push(lastClose ? `${ordered[0].open}–${lastClose}` : '24시간')
+    const ordered = [...day].sort((left, right) => left.open.localeCompare(right.open));
+    const lastClose = ordered[ordered.length - 1].close;
+    ranges.push(lastClose ? `${ordered[0].open}–${lastClose}` : '24시간');
 
     ordered.forEach((slot, index) => {
-      const next = ordered[index + 1]
+      const next = ordered[index + 1];
 
       if (slot.close && next && slot.close !== next.open) {
-        breaks.push(`${slot.close}–${next.open}`)
+        breaks.push(`${slot.close}–${next.open}`);
       }
-    })
-  })
+    });
+  });
 
-  const uniqueRanges = [...new Set(ranges)]
-  const uniqueBreaks = [...new Set(breaks)]
-  const openingHours = uniqueRanges.length === 1 ? uniqueRanges[0] : `${uniqueRanges[0]} 외`
-  const breakTime = uniqueBreaks.length === 0 ? null : uniqueBreaks.length === 1 ? uniqueBreaks[0] : `${uniqueBreaks[0]} 외`
+  const uniqueRanges = [...new Set(ranges)];
+  const uniqueBreaks = [...new Set(breaks)];
+  const openingHours = uniqueRanges.length === 1 ? uniqueRanges[0] : `${uniqueRanges[0]} 외`;
+  const breakTime =
+    uniqueBreaks.length === 0 ? null : uniqueBreaks.length === 1 ? uniqueBreaks[0] : `${uniqueBreaks[0]} 외`;
 
   return {
     openingHours: limited(openingHours),
     closedDays: limited(closed.join('·')),
     breakTime: limited(breakTime),
+  };
+}
+
+function clockMinutes(hour: string, minute: string) {
+  return Number(hour) * 60 + Number(minute);
+}
+
+function timeRangesFromText(value: string | null) {
+  if (!value) {
+    return [];
   }
+
+  return [...value.matchAll(/([01]\d|2[0-3]):([0-5]\d)\s*[–-]\s*([01]\d|2[0-3]):([0-5]\d)/g)].map((match) => ({
+    start: clockMinutes(match[1], match[2]),
+    end: clockMinutes(match[3], match[4]),
+  }));
+}
+
+export function isOpenAtClock(openingHours: string | null, breakTime: string | null, clock: string) {
+  if (!openingHours || openingHours === '24시간') {
+    return true;
+  }
+
+  const match = clock.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
+  if (!match) {
+    return true;
+  }
+
+  const minutes = clockMinutes(match[1], match[2]);
+  const ranges = timeRangesFromText(openingHours);
+
+  if (ranges.length === 0) {
+    return true;
+  }
+
+  const open = ranges.some((range) => minutes >= range.start && minutes < range.end);
+
+  if (!open) {
+    return false;
+  }
+
+  return !timeRangesFromText(breakTime).some((range) => minutes >= range.start && minutes < range.end);
 }
 
 export function formatPlaceSchedule(schedule: PlaceSchedule) {
-  const closedDays = effectiveClosedDays(schedule.openingHours, schedule.closedDays)
+  const closedDays = effectiveClosedDays(schedule.openingHours, schedule.closedDays);
   const parts = [
     schedule.openingHours ? `영업 ${schedule.openingHours}` : '',
     closedDays ? `휴무 ${closedDays}` : '',
     schedule.breakTime ? `브레이크 ${schedule.breakTime}` : '',
-  ].filter(Boolean)
+  ].filter(Boolean);
 
-  return parts.join(' · ') || '영업시간 정보 없음'
+  return parts.join(' · ') || '영업시간 정보 없음';
 }
 
 export function weekdayIndexFromDate(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (!match) {
-    return null
+    return null;
   }
 
-  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay()
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
 }
 
 export function closedWeekdayIndexes(closedDays: string | null) {
   if (!closedDays) {
-    return []
+    return [];
   }
 
   if (closedDays === '매일') {
-    return [0, 1, 2, 3, 4, 5, 6]
+    return [0, 1, 2, 3, 4, 5, 6];
   }
 
-  return [...new Set(closedDays.split('·').flatMap((label) => {
-    const day = weekdayLabels.findIndex((item) => item === label.trim())
-    return day >= 0 ? [day] : []
-  }))]
+  return [
+    ...new Set(
+      closedDays.split('·').flatMap((label) => {
+        const day = weekdayLabels.findIndex((item) => item === label.trim());
+        return day >= 0 ? [day] : [];
+      }),
+    ),
+  ];
 }
 
 export function isClosedOnDate(closedDays: string | null, date: string) {
-  const weekday = weekdayIndexFromDate(date)
-  const closed = closedWeekdayIndexes(closedDays)
+  const weekday = weekdayIndexFromDate(date);
+  const closed = closedWeekdayIndexes(closedDays);
 
-  return weekday !== null && closed.includes(weekday)
+  return weekday !== null && closed.includes(weekday);
 }
