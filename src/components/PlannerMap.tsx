@@ -3,6 +3,7 @@ import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import { toPlaceSearchResult, type PlaceSearchResult } from './PlaceSearchRunner'
 import { useMapsStatus } from './MapsProvider'
 import { formatPlaceSchedule } from '../utils/placeSchedule'
+import plannerClose from '../assets/planner-close.svg'
 
 const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours', 'photos']
 const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor']
@@ -320,6 +321,17 @@ function PlannerMap({
       </Map>
       {selectedPlace && (
         <article className="planner-place-card">
+          <button
+            type="button"
+            className="planner-place-card-close"
+            aria-label="장소 정보 닫기"
+            onClick={() => {
+              setMapPlace(null)
+              onSelectPlace(null)
+            }}
+          >
+            <img src={plannerClose} alt="" />
+          </button>
           {selectedPlace.photoUrl ? (
             <div className="planner-place-card-photo">
               <img src={selectedPlace.photoUrl} alt="" />

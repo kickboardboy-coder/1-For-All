@@ -193,6 +193,7 @@ function ResultPage() {
   const [colorPickerDay, setColorPickerDay] = useState<number | null>(null)
   const [stopDrag, setStopDrag] = useState<{ day: number; from: number; over: number; pointerId: number } | null>(null)
   const stopDragRef = useRef(stopDrag)
+  const mapPanelRef = useRef<HTMLElement>(null)
   stopDragRef.current = stopDrag
 
   useEffect(() => {
@@ -267,6 +268,22 @@ function ResultPage() {
       setDayColorIndexes({})
     }
   }, [planId])
+
+  useEffect(() => {
+    if (isLoading || !plan || plan.status !== 'optimized') {
+      return
+    }
+
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      mapPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [isLoading, plan?.status, planId])
 
   if (!planId) {
     return <Navigate to="/plans" replace />
@@ -617,7 +634,7 @@ function ResultPage() {
         </div>
       </div>
       <div className="result-workspace">
-        <section className="result-map-panel">
+        <section className="result-map-panel" ref={mapPanelRef}>
           <div className="result-panel-heading">
             <h2>
               <img src={resultMap} alt="" />
@@ -667,14 +684,6 @@ function ResultPage() {
                 )}
               </div>
             ))}
-            <button
-              type="button"
-              className="result-legend-pick"
-              disabled={legendDays.length === 0}
-              onClick={() => setColorPickerDay(legendDays[0] ?? null)}
-            >
-              색상 선택
-            </button>
           </div>
         </section>
         <aside className="result-schedule">

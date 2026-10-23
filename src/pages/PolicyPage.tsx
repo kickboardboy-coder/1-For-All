@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect } from 'react'
 import { privacyPolicy, termsPolicy, type Policy } from '../data/policies'
 
 const policies = {
@@ -28,7 +29,24 @@ function PolicyArticle({ policy }: { policy: Policy }) {
   )
 }
 
+function scrollPolicyToNav() {
+  if (!window.matchMedia('(max-width: 768px)').matches) {
+    return
+  }
+
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+}
+
 function PolicyPage({ kind }: PolicyPageProps) {
+  useLayoutEffect(() => {
+    scrollPolicyToNav()
+  }, [kind])
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(scrollPolicyToNav)
+    return () => window.cancelAnimationFrame(frame)
+  }, [kind])
+
   return <PolicyArticle policy={policies[kind]} />
 }
 

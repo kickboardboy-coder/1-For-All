@@ -221,7 +221,7 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
           ))
         })}
       </Map>
-      <p>동선은 방문 순서를 이은 선이에요. 실제 길찾기 경로가 아니에요.</p>
+      <p className="result-map-note">동선은 방문 순서를 이은 선이에요. 실제 길찾기 경로가 아니에요.</p>
     </div>
   )
 }

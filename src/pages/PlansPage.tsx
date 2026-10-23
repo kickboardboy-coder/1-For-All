@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { deletePlan, getPlans } from '../api/plans'
 import { getPlaceCount } from '../api/places'
 import EmptyState from '../components/EmptyState'
+import MapsProvider from '../components/MapsProvider'
 import PlanCard from '../components/PlanCard'
 import SkeletonLoader from '../components/SkeletonLoader'
 import planArrow from '../assets/plan-arrow.svg'
@@ -120,24 +121,28 @@ function PlansPage() {
         <p>새로운 여행을 시작하거나, 저장한 계획을 이어가세요.</p>
       </div>
       <button type="button" className="plans-new" onClick={() => navigate('/planner/new')}>
-        <span className="plans-new-mark">
-          <img src={planPlus} alt="" />
+        <span className="plans-new-head">
+          <span className="plans-new-mark">
+            <img src={planPlus} alt="" />
+          </span>
+          <span className="plans-new-copy">
+            <strong>새 여행 계획 만들기</strong>
+            <span>가고 싶은 곳만 담으면, 동선은 의쉬행이 정리해요.</span>
+          </span>
         </span>
-        <span className="plans-new-copy">
-          <strong>새 여행 계획 만들기</strong>
-          <span>가고 싶은 곳만 담으면, 동선은 의쉬행이 정리해요.</span>
+        <span className="plans-new-visual">
+          <span className="plans-route" aria-hidden="true">
+            <span className="plans-block plans-block-a" />
+            <span className="plans-block plans-block-b" />
+            <span className="plans-block plans-block-c" />
+            <span className="plans-block plans-block-d" />
+            <span className="plans-block plans-block-e" />
+            <span className="plans-block plans-block-f" />
+            <span className="plans-park" />
+            <img src={planRoute} alt="" />
+          </span>
+          <img className="plans-new-arrow" src={planArrow} alt="" />
         </span>
-        <span className="plans-route" aria-hidden="true">
-          <span className="plans-block plans-block-a" />
-          <span className="plans-block plans-block-b" />
-          <span className="plans-block plans-block-c" />
-          <span className="plans-block plans-block-d" />
-          <span className="plans-block plans-block-e" />
-          <span className="plans-block plans-block-f" />
-          <span className="plans-park" />
-          <img src={planRoute} alt="" />
-        </span>
-        <img src={planArrow} alt="" />
       </button>
       <div className="plans-list-heading">
         <div className="plans-list-title">
@@ -162,16 +167,18 @@ function PlansPage() {
             onAction={() => navigate('/planner/new')}
           />
         )}
-        {plans.map((plan, index) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            isRecent={index === 0}
-            placeCount={placeCounts[plan.id] ?? 0}
-            isDeleting={isDeletingPlan && planToDelete?.id === plan.id}
-            onDelete={setPlanToDelete}
-          />
-        ))}
+        <MapsProvider>
+          {plans.map((plan, index) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              isRecent={index === 0}
+              placeCount={placeCounts[plan.id] ?? 0}
+              isDeleting={isDeletingPlan && planToDelete?.id === plan.id}
+              onDelete={setPlanToDelete}
+            />
+          ))}
+        </MapsProvider>
       </div>
       <p className="plans-note">
         <img src={planCloud} alt="" />

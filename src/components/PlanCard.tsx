@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import RegionThumb from './RegionThumb'
 import { planStatusLabel, type Plan } from '../types/plan'
 
 type PlanCardProps = {
@@ -63,7 +64,7 @@ function PlanCard({ plan, isRecent, placeCount, isDeleting, onDelete }: PlanCard
   return (
     <article className={isRecent ? 'plan-card plan-card-recent' : 'plan-card'}>
       <Link to={plan.status === 'optimized' ? `/result/${plan.id}` : `/planner/${plan.id}`} className="plan-card-open">
-        <div className="plan-card-thumb" aria-hidden="true" />
+        <RegionThumb country={plan.country} region={plan.region} />
         <div className="plan-card-main">
           <div className="plan-card-title">
             <h2>{plan.region}</h2>
