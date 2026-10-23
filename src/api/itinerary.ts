@@ -6,7 +6,7 @@ import type { PlanLodging, PlanMeals, PlanTransit } from './plans'
 import { itineraryStopKinds, mealStopKinds, type Itinerary, type ItineraryDay, type ItineraryStop, type ItineraryStopKind, type MealStopKind } from '../types/itinerary'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
 import { placeRole } from '../utils/placeCategory'
-import { closedWeekdayIndexes, isClosedOnDate, weekdayIndexFromDate, weekdayLabels } from '../utils/placeSchedule'
+import { closedWeekdayIndexes, isClosedOnDate, isOpenAtClock, weekdayIndexFromDate, weekdayLabels } from '../utils/placeSchedule'
 
 const model = 'gpt-4.1-mini'
 
@@ -458,7 +458,8 @@ function ensureDailyMeals(
           place &&
           place.category === 'food' &&
           !usedPlaceIds.has(stop.placeId) &&
-          !isClosedOnDate(place.closedDays, day.date)
+          !isClosedOnDate(place.closedDays, day.date) &&
+          isOpenAtClock(place.openingHours, place.breakTime, stop.startTime)
 
         if (!canKeep) {
           return
@@ -490,19 +491,18 @@ function ensureDailyMeals(
   const leftoverFoods = places.filter((place) => place.category === 'food' && !usedPlaceIds.has(place.id))
 
   while (leftoverFoods.length > 0) {
-    let bestIndex = -1
-    let bestDay: ItineraryDay | null = null
-    let bestKind: MealStopKind | null = null
-    let bestMinutes = Number.POSITIVE_INFINITY
+    let pick: { index: number; day: ItineraryDay; kind: MealStopKind; minutes: number } | null = null
 
-    leftoverFoods.forEach((place, index) => {
+    for (let index = 0; index < leftoverFoods.length; index += 1) {
+      const place = leftoverFoods[index]
       const openDays = cleaned.filter((day) => !isClosedOnDate(place.closedDays, day.date))
+      const nearest = openDays[0]
 
-      if (openDays.length === 0) {
-        return
+      if (!nearest) {
+        continue
       }
 
-      const nearest = openDays.reduce((best, day) => {
+      const closest = openDays.reduce((best, day) => {
         const nearestMinutes = minutesToDay(place, best, places, lodging)
         const dayMinutes = minutesToDay(place, day, places, lodging)
 
@@ -512,32 +512,32 @@ function ensureDailyMeals(
 
         return best
       })
-      const kind = required.find((mealKind) => !nearest.stops.some((stop) => stop.kind === mealKind))
+      const kind = required.find((mealKind) => {
+        if (closest.stops.some((stop) => stop.kind === mealKind)) {
+          return false
+        }
+
+        return isOpenAtClock(place.openingHours, place.breakTime, mealWindow(mealKind, dayStart, dayEnd).startTime)
+      })
 
       if (!kind) {
-        return
+        continue
       }
 
-      const minutes = minutesToDay(place, nearest, places, lodging)
+      const minutes = minutesToDay(place, closest, places, lodging)
 
-      if (
-        minutes < bestMinutes ||
-        (minutes === bestMinutes && (bestDay === null || nearest.day < bestDay.day))
-      ) {
-        bestIndex = index
-        bestDay = nearest
-        bestKind = kind
-        bestMinutes = minutes
+      if (!pick || minutes < pick.minutes || (minutes === pick.minutes && closest.day < pick.day.day)) {
+        pick = { index, day: closest, kind, minutes }
       }
-    })
+    }
 
-    if (bestIndex < 0 || !bestDay || !bestKind) {
+    if (!pick) {
       break
     }
 
-    const [place] = leftoverFoods.splice(bestIndex, 1)
+    const [place] = leftoverFoods.splice(pick.index, 1)
     usedPlaceIds.add(place.id)
-    insertMealStop(bestDay.stops, mealStop(bestKind, place, dayStart, dayEnd))
+    insertMealStop(pick.day.stops, mealStop(pick.kind, place, dayStart, dayEnd))
   }
 
   return cleaned.map((day) => ({ ...day, stops: withStopTravel(day.stops, places, lodging) }))
@@ -555,10 +555,6 @@ function travelPairs(places: PromptPlace[]) {
 
 function isTime(value: unknown): value is string {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
-}
-
-function isDate(value: unknown): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
 function isCategory(value: unknown): value is PlaceCategory {
@@ -579,15 +575,16 @@ function toStop(value: unknown, places: PromptPlace[]): ItineraryStop | null {
 
   if (
     !place ||
-    stop.name !== place.name ||
-    !isCategory(stop.category) ||
-    stop.category !== place.category ||
     !isKind(stop.kind) ||
     !isTime(stop.startTime) ||
     !isTime(stop.endTime) ||
     stop.startTime >= stop.endTime ||
     !(stop.travelMinutes === null || (typeof stop.travelMinutes === 'number' && Number.isInteger(stop.travelMinutes) && stop.travelMinutes >= 0))
   ) {
+    return null
+  }
+
+  if (mealStopKinds.includes(stop.kind as MealStopKind) && place.category !== 'food') {
     return null
   }
 
@@ -603,36 +600,25 @@ function toStop(value: unknown, places: PromptPlace[]): ItineraryStop | null {
 }
 
 function toDays(value: unknown, places: PromptPlace[], dayCount: number, startDate: string): ItineraryDay[] | null {
-  if (!Array.isArray(value) || value.length !== dayCount) {
+  if (!Array.isArray(value)) {
     return null
   }
 
-  const days = value.map((item, index) => {
-    if (!item || typeof item !== 'object') {
-      return null
-    }
+  const listed = value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
 
-    const day = item as Record<string, unknown>
+  return Array.from({ length: dayCount }, (_, index) => {
     const date = addCalendarDays(startDate, index)
-
-    if (day.day !== index + 1 || day.date !== date || !isDate(day.date) || !Array.isArray(day.stops)) {
-      return null
-    }
-
-    const stops = day.stops.map((stop) => toStop(stop, places)).filter((stop): stop is ItineraryStop => Boolean(stop))
+    const dayNumber = index + 1
+    const match = listed.find((item) => item.day === dayNumber) ?? listed[index]
+    const rawStops = match && Array.isArray(match.stops) ? match.stops : []
+    const stops = rawStops.map((stop) => toStop(stop, places)).filter((stop): stop is ItineraryStop => Boolean(stop))
 
     if (stops[0] && stops[0].travelMinutes !== null) {
       stops[0] = { ...stops[0], travelMinutes: null }
     }
 
-    return { day: index + 1, date, stops }
+    return { day: dayNumber, date, stops }
   })
-
-  if (days.some((day) => !day)) {
-    return null
-  }
-
-  return days.filter((day): day is ItineraryDay => Boolean(day))
 }
 
 export async function requestItinerary({
@@ -685,7 +671,7 @@ export async function requestItinerary({
     travelMinutes: travelPairs(listedPlaces),
   }
   const systemPrompt =
-    '여행 일정을 JSON으로만 만든다. 주어진 장소 id만 쓴다. 주머니의 관광지와 맛집 id는 일정 전체에서 한 번만 쓴다. 같은 장소를 여러 끼니나 여러 날에 반복하지 않는다. 장소가 모자라면 끼니나 visit을 생략하고 칸을 비운다. 빈 칸이 있어도 앞날부터 억지로 채우지 말고, travelMinutes와 좌표를 보고 가까운 관광지와 맛집끼리 같은 날에 묶는다. 맛집이 둘째 날 관광지와 더 가까우면 첫째 날 끼니를 비우고 둘째 날에 넣는다. 다른 날 동선과 더 가까운 장소를 빈 칸 메우기용으로 먼 날에 넣지 않는다. 거리가 비슷할 때만 1일차부터 채운다. 1일차는 arrival 다음에 도착 시각 이후 활동 시간이 남아 있고 넣을 장소가 그날 동선과 가까우면 관광지와 맛집을 넣고, 그다음 숙소로 하루를 마친다. 중간 날은 숙소로 시작해 숙소로 끝낸다. 마지막 날은 숙소에서 시작해 departure로 끝낸다. 숙소는 지정된 lodging placeId를 쓰고 visit나 끼니로 쓰지 않으며 여러 날에 반복한다. calendar의 weekdayIndex가 그 장소 closedWeekdays에 있으면 lodging이 아닌 방문으로 넣지 말고, 다른 요일로 옮기거나 일정에서 뺀다. closedEveryDay가 true면 그 장소는 방문하지 않는다. 영업시간과 브레이크 타임을 피한다. 하루 일정은 dayStart와 dayEnd 안에 둔다. 1일차 첫 장소는 arrival이고 숙소로 시작하지 않는다. 마지막 날 마지막 장소는 departure이고 숙소로 끝내지 않는다. includeBreakfast가 true면 가능한 날만 kind=breakfast를 넣고, 쓸 맛집이 없으면 넣지 않는다. includeLunch, includeDinner도 같다. 아침·점심·저녁은 category가 food인 맛집만 쓰고, 카페는 sight이므로 끼니가 아니라 visit로만 넣는다. travelMinutes는 같은 날 바로 앞 장소에서 이동하는 분이고, 하루의 첫 장소는 null이다. 장소 사이 이동은 travelMinutes 목록을 따른다. day는 1부터 시작하고 date는 calendar와 같아야 한다.'
+    '여행 일정을 JSON으로만 만든다. 주어진 장소 id만 쓴다. 주머니의 관광지와 맛집 id는 일정 전체에서 한 번만 쓴다. 같은 장소를 여러 끼니나 여러 날에 반복하지 않는다. 장소가 모자라면 끼니나 visit을 생략하고 칸을 비운다. 빈 칸이 있어도 앞날부터 억지로 채우지 말고, travelMinutes와 좌표를 보고 가까운 관광지와 맛집끼리 같은 날에 묶는다. 맛집이 둘째 날 관광지와 더 가까우면 첫째 날 끼니를 비우고 둘째 날에 넣는다. 다른 날 동선과 더 가까운 장소를 빈 칸 메우기용으로 먼 날에 넣지 않는다. 거리가 비슷할 때만 1일차부터 채운다. 1일차는 arrival 다음에 도착 시각 이후 활동 시간이 남아 있고 넣을 장소가 그날 동선과 가까우면 관광지와 맛집을 넣고, 그다음 숙소로 하루를 마친다. 중간 날은 숙소로 시작해 숙소로 끝낸다. 마지막 날은 숙소에서 시작해 departure로 끝낸다. 숙소는 지정된 lodging placeId를 쓰고 visit나 끼니로 쓰지 않으며 여러 날에 반복한다. calendar의 weekdayIndex가 그 장소 closedWeekdays에 있으면 lodging이 아닌 방문으로 넣지 말고, 다른 요일로 옮기거나 일정에서 뺀다. closedEveryDay가 true면 그 장소는 방문하지 않는다. 영업시간과 브레이크 타임을 피한다. 아침 끼니 시각에 문을 연 맛집만 breakfast로 넣고, 저녁에만 여는 식당은 dinner로만 넣는다. 하루 일정은 dayStart와 dayEnd 안에 둔다. 1일차 첫 장소는 arrival이고 숙소로 시작하지 않는다. 마지막 날 마지막 장소는 departure이고 숙소로 끝내지 않는다. includeBreakfast가 true면 가능한 날만 kind=breakfast를 넣고, 쓸 맛집이 없으면 넣지 않는다. includeLunch, includeDinner도 같다. 아침·점심·저녁은 category가 food인 맛집만 쓰고, 카페는 sight이므로 끼니가 아니라 visit로만 넣는다. travelMinutes는 같은 날 바로 앞 장소에서 이동하는 분이고, 하루의 첫 장소는 null이다. 장소 사이 이동은 travelMinutes 목록을 따른다. day는 1부터 시작하고 date는 calendar와 같아야 한다.'
 
   async function complete(messages: Array<{ role: 'system' | 'user'; content: string }>) {
     const response = await axios.post(

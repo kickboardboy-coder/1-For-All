@@ -15,6 +15,8 @@ export type Place = {
   latitude: number
   longitude: number
   category: PlaceCategory
+  primaryType: string | null
+  types: string[]
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null

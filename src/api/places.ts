@@ -13,17 +13,27 @@ import {
 import { auth, db } from '../firebase'
 import { touchPlan } from './plans'
 import { placeCategories, type Place, type PlaceCategory } from '../types/place'
+import { googlePlaceTypes } from '../utils/placeCategory'
 import { effectiveClosedDays } from '../utils/placeSchedule'
 
 type NewPlace = {
   name: string
   category: PlaceCategory
+  primaryType?: string | null
+  types?: string[] | null
   latitude: number
   longitude: number
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null
   photoUrl: string | null
+}
+
+function typesFromData(data: DocumentData) {
+  return googlePlaceTypes(
+    typeof data.primaryType === 'string' ? data.primaryType : null,
+    Array.isArray(data.types) ? data.types.filter((type): type is string => typeof type === 'string') : [],
+  )
 }
 
 function placesCollection(planId: string) {
@@ -45,6 +55,8 @@ function toPlace(id: string, planId: string, data: DocumentData): Place | null {
     return null
   }
 
+  const googleTypes = typesFromData(data)
+
   return {
     id,
     planId,
@@ -52,6 +64,8 @@ function toPlace(id: string, planId: string, data: DocumentData): Place | null {
     latitude: typeof data.latitude === 'number' ? data.latitude : 0,
     longitude: typeof data.longitude === 'number' ? data.longitude : 0,
     category: data.category,
+    primaryType: googleTypes.primaryType,
+    types: googleTypes.types,
     openingHours: typeof data.openingHours === 'string' ? data.openingHours : null,
     closedDays: effectiveClosedDays(
       typeof data.openingHours === 'string' ? data.openingHours : null,
@@ -82,16 +96,19 @@ export async function getPlaceCount(planId: string): Promise<number> {
 
 export async function addPlace(
   planId: string,
-  { name, category, latitude, longitude, openingHours, closedDays, breakTime, photoUrl }: NewPlace,
+  { name, category, primaryType, types, latitude, longitude, openingHours, closedDays, breakTime, photoUrl }: NewPlace,
 ): Promise<Place> {
   requireUser()
 
+  const googleTypes = googlePlaceTypes(primaryType, types)
   const place = {
     planId,
     name: name.trim(),
     latitude,
     longitude,
     category,
+    primaryType: googleTypes.primaryType,
+    types: googleTypes.types,
     openingHours,
     closedDays,
     breakTime,

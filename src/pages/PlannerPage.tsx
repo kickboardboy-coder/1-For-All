@@ -114,6 +114,8 @@ function asMapPlace(place: Place): PlaceSearchResult {
     latitude: place.latitude,
     longitude: place.longitude,
     category: placeRole(place),
+    primaryType: place.primaryType,
+    types: place.types,
     openingHours: place.openingHours,
     closedDays: place.closedDays,
     breakTime: place.breakTime,
@@ -691,6 +693,8 @@ function PlannerPage() {
       const place = await addPlace(nextPlanId, {
         name: result.name,
         category: placeRole(result),
+        primaryType: result.primaryType,
+        types: result.types,
         latitude: result.latitude,
         longitude: result.longitude,
         openingHours: result.openingHours,

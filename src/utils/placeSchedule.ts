@@ -106,6 +106,48 @@ export function summarizeOpeningHours(periods: OpeningPeriod[] | undefined): Pla
   }
 }
 
+function clockMinutes(hour: string, minute: string) {
+  return Number(hour) * 60 + Number(minute)
+}
+
+function timeRangesFromText(value: string | null) {
+  if (!value) {
+    return []
+  }
+
+  return [...value.matchAll(/([01]\d|2[0-3]):([0-5]\d)\s*[–\-]\s*([01]\d|2[0-3]):([0-5]\d)/g)].map((match) => ({
+    start: clockMinutes(match[1], match[2]),
+    end: clockMinutes(match[3], match[4]),
+  }))
+}
+
+export function isOpenAtClock(openingHours: string | null, breakTime: string | null, clock: string) {
+  if (!openingHours || openingHours === '24시간') {
+    return true
+  }
+
+  const match = clock.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+
+  if (!match) {
+    return true
+  }
+
+  const minutes = clockMinutes(match[1], match[2])
+  const ranges = timeRangesFromText(openingHours)
+
+  if (ranges.length === 0) {
+    return true
+  }
+
+  const open = ranges.some((range) => minutes >= range.start && minutes < range.end)
+
+  if (!open) {
+    return false
+  }
+
+  return !timeRangesFromText(breakTime).some((range) => minutes >= range.start && minutes < range.end)
+}
+
 export function formatPlaceSchedule(schedule: PlaceSchedule) {
   const closedDays = effectiveClosedDays(schedule.openingHours, schedule.closedDays)
   const parts = [

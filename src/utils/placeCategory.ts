@@ -77,16 +77,33 @@ export function isCafeName(name: string) {
   )
 }
 
-export function isGroceryName(name: string) {
-  return /마트|슈퍼마켓|식료품|식품점|식자재|편의점|grocery|supermarket|hypermarket|convenience\s*store|상점/i.test(name)
+export function googlePlaceTypes(primaryType?: string | null, types?: string[] | null) {
+  const cleanedTypes = [...new Set((types ?? []).filter((type) => typeof type === 'string' && type.length > 0 && type.length <= 80))]
+  const cleanedPrimary = typeof primaryType === 'string' && primaryType.length > 0 && primaryType.length <= 80 ? primaryType : null
+
+  if (cleanedPrimary && !cleanedTypes.includes(cleanedPrimary)) {
+    return { primaryType: cleanedPrimary, types: [cleanedPrimary, ...cleanedTypes] }
+  }
+
+  return { primaryType: cleanedPrimary, types: cleanedTypes }
 }
 
-export function placeRole(place: { name: string; category: PlaceCategory }): PlaceCategory {
-  if (place.category !== 'stay' && (isCafeName(place.name) || isGroceryName(place.name))) {
+export function placeRole(place: {
+  name: string
+  category: PlaceCategory
+  primaryType?: string | null
+  types?: string[] | null
+}): PlaceCategory {
+  const fromTypes =
+    place.primaryType || (place.types && place.types.length > 0)
+      ? categoryFromPlaceTypes(place.primaryType, place.types)
+      : place.category
+
+  if (fromTypes !== 'stay' && isCafeName(place.name)) {
     return 'sight'
   }
 
-  return place.category
+  return fromTypes
 }
 
 export function categoryFromPlaceTypes(primaryType?: string | null, types?: string[] | null): PlaceCategory {

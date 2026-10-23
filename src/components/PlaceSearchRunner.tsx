@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { summarizeOpeningHours, type OpeningPeriod } from '../utils/placeSchedule'
-import { categoryFromPlaceTypes, placeRole } from '../utils/placeCategory'
+import { googlePlaceTypes, placeRole } from '../utils/placeCategory'
 import type { PlaceCategory } from '../types/place'
 
 export type PlaceSearchResult = {
@@ -11,6 +11,8 @@ export type PlaceSearchResult = {
   latitude: number
   longitude: number
   category: PlaceCategory
+  primaryType: string | null
+  types: string[]
   openingHours: string | null
   closedDays: string | null
   breakTime: string | null
@@ -144,6 +146,7 @@ export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | n
   }
 
   const schedule = summarizeOpeningHours(place.regularOpeningHours?.periods)
+  const googleTypes = googlePlaceTypes(place.primaryType, place.types)
 
   return {
     id: place.id,
@@ -151,7 +154,9 @@ export function toPlaceSearchResult(place: SearchedPlace): PlaceSearchResult | n
     address: place.formattedAddress ?? null,
     latitude: locationValue(place.location.lat),
     longitude: locationValue(place.location.lng),
-    category: placeRole({ name, category: categoryFromPlaceTypes(place.primaryType, place.types) }),
+    category: placeRole({ name, category: 'sight', primaryType: googleTypes.primaryType, types: googleTypes.types }),
+    primaryType: googleTypes.primaryType,
+    types: googleTypes.types,
     openingHours: schedule.openingHours,
     closedDays: schedule.closedDays,
     breakTime: schedule.breakTime,

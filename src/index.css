@@ -197,6 +197,7 @@ body {
   font-weight: 700;
   line-height: 1.45;
   box-shadow: 0 12px 32px rgb(36 61 55 / 16%);
+  pointer-events: none;
 }
 
 .toast-success {
@@ -1296,7 +1297,7 @@ body {
 
 .planner-place-card {
   position: absolute;
-  z-index: 5;
+  z-index: 12;
   right: 16px;
   bottom: 16px;
   left: 16px;
@@ -1390,6 +1391,8 @@ body {
 }
 
 .planner-place-card-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-shrink: 0;
   flex-direction: column;
@@ -2479,6 +2482,11 @@ body {
   font-weight: 400;
 }
 
+.login-forgot:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .login-error {
   margin: 0;
   color: #c4514a;
@@ -2488,6 +2496,13 @@ body {
 
 .login-form-error {
   margin-top: 16px;
+}
+
+.login-reset-note {
+  margin: 16px 0 0;
+  color: #27846e;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .login-submit {
