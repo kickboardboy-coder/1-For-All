@@ -1,17 +1,17 @@
-import { NavLink, Outlet, useLocation } from 'react-router'
-import ErrorBoundary from '../components/ErrorBoundary'
-import Navbar from '../components/Navbar'
+import { NavLink, Outlet, useLocation } from 'react-router';
+import ErrorBoundary from '../components/ErrorBoundary';
+import Navbar from '../components/Navbar';
 
 function scrollPolicyToNav() {
   if (!window.matchMedia('(max-width: 768px)').matches) {
-    return
+    return;
   }
 
-  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
 
 function RootLayout() {
-  const location = useLocation()
+  const location = useLocation();
 
   return (
     <div className="app-shell">
@@ -36,7 +36,7 @@ function RootLayout() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
 
-export default RootLayout
+export default RootLayout;

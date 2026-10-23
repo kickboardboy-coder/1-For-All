@@ -1,14 +1,14 @@
 export type PolicySection = {
-  title: string
-  paragraphs: string[]
-}
+  title: string;
+  paragraphs: string[];
+};
 
 export type Policy = {
-  title: string
-  updated: string
-  intro: string
-  sections: PolicySection[]
-}
+  title: string;
+  updated: string;
+  intro: string;
+  sections: PolicySection[];
+};
 
 export const termsPolicy: Policy = {
   title: '이용약관',
@@ -59,12 +59,10 @@ export const termsPolicy: Policy = {
     },
     {
       title: '7. 문의',
-      paragraphs: [
-        '약관과 서비스에 관한 문의는 의쉬행 팀으로 해 주세요. 본 서비스는 팀 프로젝트로 운영됩니다.',
-      ],
+      paragraphs: ['약관과 서비스에 관한 문의는 의쉬행 팀으로 해 주세요. 본 서비스는 팀 프로젝트로 운영됩니다.'],
     },
   ],
-}
+};
 
 export const privacyPolicy: Policy = {
   title: '개인정보 처리방침',
@@ -122,4 +120,4 @@ export const privacyPolicy: Policy = {
       ],
     },
   ],
-}
+};

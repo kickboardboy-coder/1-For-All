@@ -1,62 +1,86 @@
-import { useEffect, useRef, useState } from 'react'
-import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
-import { usePlaceSearch, toPlaceSearchResult, type PlaceSearchInput, type PlaceSearchResult } from './PlaceSearchRunner'
-import { mapsUnavailableMessage, useMapsStatus } from './MapsProvider'
-import { formatPlaceSchedule } from '../utils/placeSchedule'
-import plannerClose from '../assets/planner-close.svg'
+import { useEffect, useRef, useState } from 'react';
+import { Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import {
+  usePlaceSearch,
+  toPlaceSearchResult,
+  type PlaceSearchInput,
+  type PlaceSearchResult,
+} from './PlaceSearchRunner';
+import { mapsUnavailableMessage, useMapsStatus } from './MapsProvider';
+import { formatPlaceSchedule } from '../utils/placeSchedule';
+import plannerClose from '../assets/planner-close.svg';
 
-const mapPlaceFields = ['id', 'displayName', 'formattedAddress', 'location', 'primaryType', 'types', 'regularOpeningHours', 'photos']
-const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor']
+const mapPlaceFields = [
+  'id',
+  'displayName',
+  'formattedAddress',
+  'location',
+  'primaryType',
+  'types',
+  'regularOpeningHours',
+  'photos',
+];
+const mapPlaceIconFields = ['svgIconMaskURI', 'iconBackgroundColor'];
 
 type PlannerMapProps = {
-  latitude: number
-  longitude: number
-  zoom: number
-  places: PlaceSearchResult[]
-  pinnedPlace?: PlaceSearchResult | null
-  selectedPlaceId: string | null
-  focus: 'results' | 'place'
-  onSelectPlace: (placeId: string | null) => void
-  savedPlaceNames: string[]
-  isAddingPlace: boolean
-  onAddPlace: (place: PlaceSearchResult) => void
-}
+  latitude: number;
+  longitude: number;
+  zoom: number;
+  places: PlaceSearchResult[];
+  pinnedPlace?: PlaceSearchResult | null;
+  selectedPlaceId: string | null;
+  focus: 'results' | 'place';
+  onSelectPlace: (placeId: string | null) => void;
+  savedPlaceNames: string[];
+  isAddingPlace: boolean;
+  onAddPlace: (place: PlaceSearchResult) => void;
+};
 
 function MapCamera({ latitude, longitude, zoom }: Pick<PlannerMapProps, 'latitude' | 'longitude' | 'zoom'>) {
-  const map = useMap()
+  const map = useMap();
 
   useEffect(() => {
-    map?.moveCamera({ center: { lat: latitude, lng: longitude }, zoom })
-  }, [map, latitude, longitude, zoom])
+    map?.moveCamera({ center: { lat: latitude, lng: longitude }, zoom });
+  }, [map, latitude, longitude, zoom]);
 
-  return null
+  return null;
 }
 
-function MapPlaceClicks({ onPick }: { onPick: (placeId: string, latitude: number | null, longitude: number | null) => void }) {
-  const map = useMap()
-  const onPickRef = useRef(onPick)
-  onPickRef.current = onPick
+function MapPlaceClicks({
+  onPick,
+}: {
+  onPick: (placeId: string, latitude: number | null, longitude: number | null) => void;
+}) {
+  const map = useMap();
+  const onPickRef = useRef(onPick);
+
+  useEffect(() => {
+    onPickRef.current = onPick;
+  });
 
   useEffect(() => {
     if (!map) {
-      return
+      return;
     }
 
-    const listener = map.addListener('click', (event: { placeId?: string; latLng?: { lat: () => number; lng: () => number }; stop?: () => void }) => {
-      if (!event.placeId) {
-        return
-      }
+    const listener = map.addListener(
+      'click',
+      (event: { placeId?: string; latLng?: { lat: () => number; lng: () => number }; stop?: () => void }) => {
+        if (!event.placeId) {
+          return;
+        }
 
-      event.stop?.()
-      onPickRef.current(event.placeId, event.latLng?.lat() ?? null, event.latLng?.lng() ?? null)
-    })
+        event.stop?.();
+        onPickRef.current(event.placeId, event.latLng?.lat() ?? null, event.latLng?.lng() ?? null);
+      },
+    );
 
     return () => {
-      listener.remove()
-    }
-  }, [map])
+      listener.remove();
+    };
+  }, [map]);
 
-  return null
+  return null;
 }
 
 function MapPlaces({
@@ -66,38 +90,40 @@ function MapPlaces({
   focus,
   onSelectPlace,
 }: Pick<PlannerMapProps, 'places' | 'pinnedPlace' | 'selectedPlaceId' | 'focus' | 'onSelectPlace'>) {
-  const map = useMap()
+  const map = useMap();
 
   useEffect(() => {
     if (!map) {
-      return
+      return;
     }
 
-    const selected = places.find((place) => place.id === selectedPlaceId) ?? (pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null)
+    const selected =
+      places.find((place) => place.id === selectedPlaceId) ??
+      (pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null);
 
     if (focus === 'place' && selected) {
-      map.moveCamera({ center: { lat: selected.latitude, lng: selected.longitude }, zoom: 15 })
-      return
+      map.moveCamera({ center: { lat: selected.latitude, lng: selected.longitude }, zoom: 15 });
+      return;
     }
 
     if (places.length === 0) {
-      return
+      return;
     }
 
     if (places.length === 1) {
-      map.moveCamera({ center: { lat: places[0].latitude, lng: places[0].longitude }, zoom: 15 })
-      return
+      map.moveCamera({ center: { lat: places[0].latitude, lng: places[0].longitude }, zoom: 15 });
+      return;
     }
 
-    const latitudes = places.map((place) => place.latitude)
-    const longitudes = places.map((place) => place.longitude)
+    const latitudes = places.map((place) => place.latitude);
+    const longitudes = places.map((place) => place.longitude);
     map.fitBounds({
       north: Math.max(...latitudes),
       south: Math.min(...latitudes),
       east: Math.max(...longitudes),
       west: Math.min(...longitudes),
-    })
-  }, [map, places, pinnedPlace, selectedPlaceId, focus])
+    });
+  }, [map, places, pinnedPlace, selectedPlaceId, focus]);
 
   return (
     <>
@@ -121,7 +147,7 @@ function MapPlaces({
         />
       )}
     </>
-  )
+  );
 }
 
 function PlannerMap({
@@ -137,13 +163,13 @@ function PlannerMap({
   isAddingPlace,
   onAddPlace,
 }: PlannerMapProps) {
-  const status = useMapsStatus()
-  const placesLibrary = useMapsLibrary('places')
-  const [mapPlace, setMapPlace] = useState<PlaceSearchResult | null>(null)
-  const [pinDetails, setPinDetails] = useState<PlaceSearchResult | null>(null)
-  const pickSeq = useRef(0)
-  const pinSeq = useRef(0)
-  const selectedFromPin = pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null
+  const status = useMapsStatus();
+  const placesLibrary = useMapsLibrary('places');
+  const [mapPlace, setMapPlace] = useState<PlaceSearchResult | null>(null);
+  const [pinDetails, setPinDetails] = useState<PlaceSearchResult | null>(null);
+  const pickSeq = useRef(0);
+  const pinSeq = useRef(0);
+  const selectedFromPin = pinnedPlace?.id === selectedPlaceId ? pinnedPlace : null;
   const selectedPlace =
     places.find((place) => place.id === selectedPlaceId) ??
     (selectedFromPin
@@ -158,25 +184,25 @@ function PlannerMap({
           breakTime: selectedFromPin.breakTime ?? pinDetails?.breakTime ?? null,
         }
       : null) ??
-    mapPlace
-  const selectedIndex = selectedPlace ? places.findIndex((place) => place.id === selectedPlace.id) : -1
-  const mapsPlaceId = selectedFromPin && pinDetails?.id ? pinDetails.id : selectedPlace?.id
-  const placeSchedule = selectedPlace ? formatPlaceSchedule(selectedPlace) : ''
+    mapPlace;
+  const selectedIndex = selectedPlace ? places.findIndex((place) => place.id === selectedPlace.id) : -1;
+  const mapsPlaceId = selectedFromPin && pinDetails?.id ? pinDetails.id : selectedPlace?.id;
+  const placeSchedule = selectedPlace ? formatPlaceSchedule(selectedPlace) : '';
 
   useEffect(() => {
     if (places.some((place) => place.id === selectedPlaceId)) {
-      setMapPlace(null)
+      setMapPlace(null);
     }
-  }, [places, selectedPlaceId])
+  }, [places, selectedPlaceId]);
 
   useEffect(() => {
     if (!placesLibrary || !pinnedPlace || selectedPlaceId !== pinnedPlace.id) {
-      setPinDetails(null)
-      return
+      setPinDetails(null);
+      return;
     }
 
-    let ignore = false
-    const seq = ++pinSeq.current
+    let ignore = false;
+    const seq = ++pinSeq.current;
 
     void (async () => {
       try {
@@ -187,21 +213,21 @@ function PlannerMap({
           region: 'KR',
           maxResultCount: 1,
           locationBias: { center: { lat: pinnedPlace.latitude, lng: pinnedPlace.longitude }, radius: 500 },
-        })
-        const first = found?.[0]
+        });
+        const first = found?.[0];
 
         if (!first || ignore || seq !== pinSeq.current) {
-          return
+          return;
         }
 
         try {
-          await first.fetchFields({ fields: mapPlaceIconFields })
+          await first.fetchFields({ fields: mapPlaceIconFields });
         } catch {
           // 아이콘은 없어도 주소·영업시간은 카드에 넣는다.
         }
 
         if (ignore || seq !== pinSeq.current) {
-          return
+          return;
         }
 
         const result = toPlaceSearchResult({
@@ -215,73 +241,74 @@ function PlannerMap({
           svgIconMaskURI: first.svgIconMaskURI,
           iconBackgroundColor: first.iconBackgroundColor,
           photos: first.photos,
-        })
+        });
 
         if (result) {
-          setPinDetails(result)
+          setPinDetails(result);
         }
       } catch {
         if (!ignore && seq === pinSeq.current) {
-          setPinDetails(null)
+          setPinDetails(null);
         }
       }
-    })()
+    })();
 
     return () => {
-      ignore = true
-    }
-  }, [placesLibrary, pinnedPlace, selectedPlaceId])
+      ignore = true;
+    };
+  }, [placesLibrary, pinnedPlace, selectedPlaceId]);
 
   async function pickMapPlace(placeId: string, latitude: number | null, longitude: number | null) {
-    const seq = ++pickSeq.current
-    const searched = places.find((place) => place.id === placeId)
+    const seq = ++pickSeq.current;
+    const searched = places.find((place) => place.id === placeId);
 
     if (searched) {
-      setMapPlace(null)
-      onSelectPlace(searched.id)
-      return
+      setMapPlace(null);
+      onSelectPlace(searched.id);
+      return;
     }
 
-    setMapPlace(null)
-    onSelectPlace(null)
+    setMapPlace(null);
+    onSelectPlace(null);
 
     if (!placesLibrary) {
-      return
+      return;
     }
 
     try {
-      const place = new placesLibrary.Place({ id: placeId })
-      await place.fetchFields({ fields: mapPlaceFields })
+      const place = new placesLibrary.Place({ id: placeId });
+      await place.fetchFields({ fields: mapPlaceFields });
 
       try {
-        await place.fetchFields({ fields: mapPlaceIconFields })
+        await place.fetchFields({ fields: mapPlaceIconFields });
       } catch {
         // 아이콘 필드는 없어도 이름만 있으면 카드를 연다.
       }
 
       if (seq !== pickSeq.current) {
-        return
+        return;
       }
 
       const result = toPlaceSearchResult({
         id: place.id || placeId,
         displayName: place.displayName,
         formattedAddress: place.formattedAddress,
-        location: place.location ?? (latitude !== null && longitude !== null ? { lat: latitude, lng: longitude } : null),
+        location:
+          place.location ?? (latitude !== null && longitude !== null ? { lat: latitude, lng: longitude } : null),
         primaryType: place.primaryType,
         types: place.types,
         regularOpeningHours: place.regularOpeningHours,
         svgIconMaskURI: place.svgIconMaskURI,
         iconBackgroundColor: place.iconBackgroundColor,
         photos: place.photos,
-      })
+      });
 
       if (!result) {
-        return
+        return;
       }
 
-      setMapPlace(result)
-      onSelectPlace(result.id)
+      setMapPlace(result);
+      onSelectPlace(result.id);
     } catch {
       // 이름·위치를 못 받으면 빈 카드는 열지 않는다.
     }
@@ -290,11 +317,9 @@ function PlannerMap({
   if (status !== 'ready') {
     return (
       <div className="planner-map" role="alert">
-        <p>
-          {mapsUnavailableMessage(status)}
-        </p>
+        <p>{mapsUnavailableMessage(status)}</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -324,8 +349,8 @@ function PlannerMap({
             className="planner-place-card-close"
             aria-label="장소 정보 닫기"
             onClick={() => {
-              setMapPlace(null)
-              onSelectPlace(null)
+              setMapPlace(null);
+              onSelectPlace(null);
             }}
           >
             <img src={plannerClose} alt="" />
@@ -371,7 +396,7 @@ function PlannerMap({
         </article>
       )}
     </div>
-  )
+  );
 }
 
 export function PlannerMapPanel({
@@ -379,7 +404,7 @@ export function PlannerMapPanel({
   hubSearch,
   ...mapProps
 }: PlannerMapProps & { placeSearch: PlaceSearchInput; hubSearch: PlaceSearchInput }) {
-  usePlaceSearch(placeSearch)
-  usePlaceSearch(hubSearch)
-  return <PlannerMap {...mapProps} />
+  usePlaceSearch(placeSearch);
+  usePlaceSearch(hubSearch);
+  return <PlannerMap {...mapProps} />;
 }

@@ -1,0 +1,8 @@
+dist
+node_modules
+functions/node_modules
+package-lock.json
+functions/package-lock.json
+*.local
+.env
+.env.*

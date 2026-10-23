@@ -1,44 +1,58 @@
-import axios from 'axios'
-import { httpsCallable } from 'firebase/functions'
-import { collection, doc, getDocs, type WriteBatch } from 'firebase/firestore'
-import { db, functions } from '../firebase'
-import { commitBatched } from './batch'
-import type { PlanLodging, PlanMeals, PlanTransit } from './plans'
-import { requireUser } from './session'
-import { itineraryStopKinds, mealStopKinds, type Itinerary, type ItineraryDay, type ItineraryStop, type ItineraryStopKind, type MealStopKind } from '../types/itinerary'
-import { placeCategories, type Place, type PlaceCategory } from '../types/place'
-import { placeRole } from '../utils/placeCategory'
-import { closedWeekdayIndexes, isClosedOnDate, isOpenAtClock, weekdayIndexFromDate, weekdayLabels } from '../utils/placeSchedule'
+import axios from 'axios';
+import { httpsCallable } from 'firebase/functions';
+import { collection, doc, getDocs, type WriteBatch } from 'firebase/firestore';
+import { db, functions } from '../firebase';
+import { commitBatched } from './batch';
+import type { PlanLodging, PlanMeals, PlanTransit } from './plans';
+import { requireUser } from './session';
+import {
+  itineraryStopKinds,
+  mealStopKinds,
+  type Itinerary,
+  type ItineraryDay,
+  type ItineraryStop,
+  type ItineraryStopKind,
+  type MealStopKind,
+} from '../types/itinerary';
+import { placeCategories, type Place, type PlaceCategory } from '../types/place';
+import { placeRole } from '../utils/placeCategory';
+import {
+  closedWeekdayIndexes,
+  isClosedOnDate,
+  isOpenAtClock,
+  weekdayIndexFromDate,
+  weekdayLabels,
+} from '../utils/placeSchedule';
 
-const model = 'gpt-4.1-mini'
+const model = 'gpt-4.1-mini';
 
 type OptimizeInput = {
-  planId: string
-  country: string | null
-  region: string
-  nights: number
-  startDate: string
-  dayStart: string
-  dayEnd: string
-  meals: PlanMeals
-  lodging: PlanLodging
-  arrival: PlanTransit
-  departure: PlanTransit
-  places: Place[]
-}
+  planId: string;
+  country: string | null;
+  region: string;
+  nights: number;
+  startDate: string;
+  dayStart: string;
+  dayEnd: string;
+  meals: PlanMeals;
+  lodging: PlanLodging;
+  arrival: PlanTransit;
+  departure: PlanTransit;
+  places: Place[];
+};
 
 type PromptPlace = {
-  id: string
-  name: string
-  category: PlaceCategory
-  latitude: number
-  longitude: number
-  openingHours: string | null
-  closedDays: string | null
-  closedWeekdays: number[]
-  closedEveryDay: boolean
-  breakTime: string | null
-}
+  id: string;
+  name: string;
+  category: PlaceCategory;
+  latitude: number;
+  longitude: number;
+  openingHours: string | null;
+  closedDays: string | null;
+  closedWeekdays: number[];
+  closedEveryDay: boolean;
+  breakTime: string | null;
+};
 
 const itinerarySchema = {
   type: 'object',
@@ -75,28 +89,28 @@ const itinerarySchema = {
       },
     },
   },
-} as const
+} as const;
 
-export const walkSpeedKmh = 4
-export const driveSpeedKmh = 30
+export const walkSpeedKmh = 4;
+export const driveSpeedKmh = 30;
 
 export function travelMinutes(
   from: { latitude: number; longitude: number },
   to: { latitude: number; longitude: number },
   kmPerHour = driveSpeedKmh,
 ) {
-  const earthRadiusKm = 6371
-  const toRadians = (degree: number) => (degree * Math.PI) / 180
-  const latitudeDelta = toRadians(to.latitude - from.latitude)
-  const longitudeDelta = toRadians(to.longitude - from.longitude)
-  const fromLatitude = toRadians(from.latitude)
-  const toLatitude = toRadians(to.latitude)
+  const earthRadiusKm = 6371;
+  const toRadians = (degree: number) => (degree * Math.PI) / 180;
+  const latitudeDelta = toRadians(to.latitude - from.latitude);
+  const longitudeDelta = toRadians(to.longitude - from.longitude);
+  const fromLatitude = toRadians(from.latitude);
+  const toLatitude = toRadians(to.latitude);
   const haversine =
     Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.sin(longitudeDelta / 2) ** 2
-  const kilometers = 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine))
+    Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  const kilometers = 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine));
 
-  return Math.max(1, Math.round((kilometers / kmPerHour) * 60))
+  return Math.max(1, Math.round((kilometers / kmPerHour) * 60));
 }
 
 function toPromptPlace(
@@ -109,7 +123,7 @@ function toPromptPlace(
   closedDays: string | null,
   breakTime: string | null,
 ): PromptPlace {
-  const closedWeekdays = closedWeekdayIndexes(closedDays)
+  const closedWeekdays = closedWeekdayIndexes(closedDays);
 
   return {
     id,
@@ -122,179 +136,214 @@ function toPromptPlace(
     closedWeekdays,
     closedEveryDay: closedWeekdays.length === 7,
     breakTime,
-  }
+  };
 }
 
 function addTransitPlace(listed: PromptPlace[], transit: PlanTransit) {
   if (listed.some((place) => place.id === transit.placeId)) {
-    return listed
+    return listed;
   }
 
-  return [...listed, toPromptPlace(transit.placeId, transit.name, 'sight', transit.latitude, transit.longitude, null, null, null)]
+  return [
+    ...listed,
+    toPromptPlace(transit.placeId, transit.name, 'sight', transit.latitude, transit.longitude, null, null, null),
+  ];
 }
 
-function promptPlaces(places: Place[], lodging: PlanLodging, arrival: PlanTransit, departure: PlanTransit): PromptPlace[] {
+function promptPlaces(
+  places: Place[],
+  lodging: PlanLodging,
+  arrival: PlanTransit,
+  departure: PlanTransit,
+): PromptPlace[] {
   const listed = places.map((place) =>
-    toPromptPlace(place.id, place.name, placeRole(place), place.latitude, place.longitude, place.openingHours, place.closedDays, place.breakTime),
-  )
+    toPromptPlace(
+      place.id,
+      place.name,
+      placeRole(place),
+      place.latitude,
+      place.longitude,
+      place.openingHours,
+      place.closedDays,
+      place.breakTime,
+    ),
+  );
   const withLodging = listed.some((place) => place.id === lodging.lodgingPlaceId)
     ? listed
-    : [...listed, toPromptPlace(lodging.lodgingPlaceId, lodging.lodgingName, 'stay', lodging.lodgingLatitude, lodging.lodgingLongitude, null, null, null)]
+    : [
+        ...listed,
+        toPromptPlace(
+          lodging.lodgingPlaceId,
+          lodging.lodgingName,
+          'stay',
+          lodging.lodgingLatitude,
+          lodging.lodgingLongitude,
+          null,
+          null,
+          null,
+        ),
+      ];
 
-  return addTransitPlace(addTransitPlace(withLodging, arrival), departure)
+  return addTransitPlace(addTransitPlace(withLodging, arrival), departure);
 }
 
 function addCalendarDays(startDate: string, days: number) {
-  const match = startDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const match = startDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (!match) {
-    return startDate
+    return startDate;
   }
 
-  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days)).toISOString().slice(0, 10)
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days)).toISOString().slice(0, 10);
 }
 
 function tripCalendar(startDate: string, dayCount: number) {
   return Array.from({ length: dayCount }, (_, index) => {
-    const date = addCalendarDays(startDate, index)
-    const weekdayIndex = weekdayIndexFromDate(date) ?? 0
+    const date = addCalendarDays(startDate, index);
+    const weekdayIndex = weekdayIndexFromDate(date) ?? 0;
 
     return {
       day: index + 1,
       date,
       weekday: weekdayLabels[weekdayIndex],
       weekdayIndex,
-    }
-  })
+    };
+  });
 }
 
 function indexPlaces(places: PromptPlace[]) {
-  return new Map(places.map((place) => [place.id, place]))
+  return new Map(places.map((place) => [place.id, place]));
 }
 
 function closedDayViolations(days: ItineraryDay[], places: PromptPlace[]) {
-  const byId = indexPlaces(places)
+  const byId = indexPlaces(places);
 
   return days.flatMap((day) =>
     day.stops.flatMap((stop) => {
       if (stop.kind === 'lodging' || stop.kind === 'arrival' || stop.kind === 'departure') {
-        return []
+        return [];
       }
 
-      const place = byId.get(stop.placeId)
+      const place = byId.get(stop.placeId);
 
       if (!place || !isClosedOnDate(place.closedDays, day.date)) {
-        return []
+        return [];
       }
 
-      return [`${place.name}은 ${weekdayLabels[weekdayIndexFromDate(day.date) ?? 0]}요일 휴무인데 ${day.day}일차(${day.date})에 들어갔다.`]
+      return [
+        `${place.name}은 ${weekdayLabels[weekdayIndexFromDate(day.date) ?? 0]}요일 휴무인데 ${day.day}일차(${day.date})에 들어갔다.`,
+      ];
     }),
-  )
+  );
 }
 
 function requiredMealKinds(meals: PlanMeals): MealStopKind[] {
   return mealStopKinds.filter((kind) => {
     if (kind === 'breakfast') {
-      return meals.includeBreakfast
+      return meals.includeBreakfast;
     }
 
     if (kind === 'lunch') {
-      return meals.includeLunch
+      return meals.includeLunch;
     }
 
-    return meals.includeDinner
-  })
+    return meals.includeDinner;
+  });
 }
 
 function clockFromMinutes(value: number) {
-  const minutes = Math.max(0, Math.min(23 * 60 + 30, value))
-  const hour = Math.floor(minutes / 60)
-  const minute = minutes % 60 >= 30 ? 30 : 0
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  const minutes = Math.max(0, Math.min(23 * 60 + 30, value));
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60 >= 30 ? 30 : 0;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function minutesFromClock(value: string) {
-  const [hour, minute] = value.split(':').map(Number)
-  return hour * 60 + minute
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
 }
 
 function mealWindow(kind: MealStopKind, dayStart: string, dayEnd: string) {
-  const startMinutes = minutesFromClock(dayStart)
-  const endMinutes = minutesFromClock(dayEnd)
+  const startMinutes = minutesFromClock(dayStart);
+  const endMinutes = minutesFromClock(dayEnd);
   const preferred =
     kind === 'breakfast'
       ? [startMinutes, startMinutes + 60]
       : kind === 'lunch'
         ? [Math.floor((startMinutes + endMinutes) / 2) - 45, Math.floor((startMinutes + endMinutes) / 2) + 45]
-        : [endMinutes - 90, endMinutes]
-  let start = Math.max(startMinutes, preferred[0])
-  let end = Math.min(endMinutes, preferred[1])
+        : [endMinutes - 90, endMinutes];
+  let start = Math.max(startMinutes, preferred[0]);
+  let end = Math.min(endMinutes, preferred[1]);
 
   if (start >= end) {
-    start = startMinutes
-    end = Math.min(endMinutes, startMinutes + 60)
+    start = startMinutes;
+    end = Math.min(endMinutes, startMinutes + 60);
   }
 
   if (start >= end) {
-    end = Math.min(23 * 60 + 30, start + 30)
+    end = Math.min(23 * 60 + 30, start + 30);
   }
 
-  return { startTime: clockFromMinutes(start), endTime: clockFromMinutes(Math.max(end, start + 30)) }
+  return { startTime: clockFromMinutes(start), endTime: clockFromMinutes(Math.max(end, start + 30)) };
 }
 
 function placeCoords(placeId: string, byId: Map<string, PromptPlace>, lodging: PlanLodging) {
-  const place = byId.get(placeId)
+  const place = byId.get(placeId);
 
   if (place) {
-    return { latitude: place.latitude, longitude: place.longitude }
+    return { latitude: place.latitude, longitude: place.longitude };
   }
 
   if (placeId === lodging.lodgingPlaceId) {
-    return { latitude: lodging.lodgingLatitude, longitude: lodging.lodgingLongitude }
+    return { latitude: lodging.lodgingLatitude, longitude: lodging.lodgingLongitude };
   }
 
-  return null
+  return null;
 }
 
 function withStopTravel(stops: ItineraryStop[], byId: Map<string, PromptPlace>, lodging: PlanLodging) {
   return stops.map((stop, index) => {
     if (index === 0) {
-      return { ...stop, travelMinutes: null }
+      return { ...stop, travelMinutes: null };
     }
 
-    const from = placeCoords(stops[index - 1].placeId, byId, lodging)
-    const to = placeCoords(stop.placeId, byId, lodging)
+    const from = placeCoords(stops[index - 1].placeId, byId, lodging);
+    const to = placeCoords(stop.placeId, byId, lodging);
 
     if (!from || !to) {
-      return stop
+      return stop;
     }
 
-    return { ...stop, travelMinutes: travelMinutes(from, to) }
-  })
+    return { ...stop, travelMinutes: travelMinutes(from, to) };
+  });
 }
 
 function dayClusterCoords(day: ItineraryDay, byId: Map<string, PromptPlace>, lodging: PlanLodging) {
   const preferred = day.stops.filter(
-    (stop) => stop.kind === 'visit' || stop.kind === 'arrival' || stop.kind === 'departure' || mealStopKinds.includes(stop.kind as MealStopKind),
-  )
-  const source = preferred.length > 0 ? preferred : day.stops
+    (stop) =>
+      stop.kind === 'visit' ||
+      stop.kind === 'arrival' ||
+      stop.kind === 'departure' ||
+      mealStopKinds.includes(stop.kind as MealStopKind),
+  );
+  const source = preferred.length > 0 ? preferred : day.stops;
   const coords = source
     .map((stop) => placeCoords(stop.placeId, byId, lodging))
-    .filter((point): point is { latitude: number; longitude: number } => Boolean(point))
+    .filter((point): point is { latitude: number; longitude: number } => Boolean(point));
 
   if (coords.length > 0) {
-    return coords
+    return coords;
   }
 
-  return [{ latitude: lodging.lodgingLatitude, longitude: lodging.lodgingLongitude }]
+  return [{ latitude: lodging.lodgingLatitude, longitude: lodging.lodgingLongitude }];
 }
 
 function minutesToDay(place: PromptPlace, day: ItineraryDay, byId: Map<string, PromptPlace>, lodging: PlanLodging) {
-  return Math.min(...dayClusterCoords(day, byId, lodging).map((point) => travelMinutes(place, point)))
+  return Math.min(...dayClusterCoords(day, byId, lodging).map((point) => travelMinutes(place, point)));
 }
 
 function mealStop(kind: MealStopKind, place: PromptPlace, dayStart: string, dayEnd: string): ItineraryStop {
-  const window = mealWindow(kind, dayStart, dayEnd)
+  const window = mealWindow(kind, dayStart, dayEnd);
 
   return {
     placeId: place.id,
@@ -304,48 +353,52 @@ function mealStop(kind: MealStopKind, place: PromptPlace, dayStart: string, dayE
     startTime: window.startTime,
     endTime: window.endTime,
     travelMinutes: 5,
-  }
+  };
 }
 
 function insertMealStop(stops: ItineraryStop[], stop: ItineraryStop) {
-  const firstKind = stops[0]?.kind
-  const lastKind = stops.at(-1)?.kind
-  const first = firstKind === 'lodging' || firstKind === 'arrival' ? 1 : 0
-  const last = lastKind === 'lodging' || lastKind === 'departure' ? stops.length - 1 : stops.length
+  const firstKind = stops[0]?.kind;
+  const lastKind = stops.at(-1)?.kind;
+  const first = firstKind === 'lodging' || firstKind === 'arrival' ? 1 : 0;
+  const last = lastKind === 'lodging' || lastKind === 'departure' ? stops.length - 1 : stops.length;
 
   if (stop.kind === 'breakfast') {
-    stops.splice(first, 0, stop)
-    return
+    stops.splice(first, 0, stop);
+    return;
   }
 
   if (stop.kind === 'dinner') {
-    stops.splice(last, 0, stop)
-    return
+    stops.splice(last, 0, stop);
+    return;
   }
 
-  stops.splice(Math.min(last, first + Math.ceil((last - first) / 2)), 0, stop)
+  stops.splice(Math.min(last, first + Math.ceil((last - first) / 2)), 0, stop);
 }
 
 function addMinutesClock(value: string, add: number) {
-  const total = minutesFromClock(value) + add
+  const total = minutesFromClock(value) + add;
 
   if (total >= 24 * 60) {
-    return '23:59'
+    return '23:59';
   }
 
-  const hour = Math.floor(total / 60)
-  const minute = total % 60
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  const hour = Math.floor(total / 60);
+  const minute = total % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
-function transitStop(kind: 'arrival' | 'departure', transit: PlanTransit, byId: Map<string, PromptPlace>): ItineraryStop {
-  const place = byId.get(transit.placeId)
-  let startTime = transit.time
-  let endTime = addMinutesClock(startTime, 30)
+function transitStop(
+  kind: 'arrival' | 'departure',
+  transit: PlanTransit,
+  byId: Map<string, PromptPlace>,
+): ItineraryStop {
+  const place = byId.get(transit.placeId);
+  let startTime = transit.time;
+  let endTime = addMinutesClock(startTime, 30);
 
   if (startTime >= endTime) {
-    startTime = '23:00'
-    endTime = '23:59'
+    startTime = '23:00';
+    endTime = '23:59';
   }
 
   return {
@@ -356,7 +409,7 @@ function transitStop(kind: 'arrival' | 'departure', transit: PlanTransit, byId: 
     startTime,
     endTime,
     travelMinutes: kind === 'arrival' ? null : 5,
-  }
+  };
 }
 
 function ensureTripAnchors(
@@ -367,37 +420,37 @@ function ensureTripAnchors(
   departure: PlanTransit,
 ) {
   return days.map((day, index) => {
-    const stops = day.stops.filter((stop) => stop.kind !== 'arrival' && stop.kind !== 'departure')
+    const stops = day.stops.filter((stop) => stop.kind !== 'arrival' && stop.kind !== 'departure');
 
     if (index === 0) {
       while (stops[0]?.kind === 'lodging') {
-        stops.shift()
+        stops.shift();
       }
 
-      stops.unshift(transitStop('arrival', arrival, byId))
+      stops.unshift(transitStop('arrival', arrival, byId));
     }
 
     if (index === days.length - 1) {
       while (stops.at(-1)?.kind === 'lodging') {
-        stops.pop()
+        stops.pop();
       }
 
-      stops.push(transitStop('departure', departure, byId))
+      stops.push(transitStop('departure', departure, byId));
     }
 
     if (stops.length === 0) {
-      return day
+      return day;
     }
 
-    return { ...day, stops: withStopTravel(stops, byId, lodging) }
-  })
+    return { ...day, stops: withStopTravel(stops, byId, lodging) };
+  });
 }
 
 function lodgingStop(lodging: PlanLodging, edge: 'start' | 'end', dayStart: string, dayEnd: string): ItineraryStop {
-  const startMinutes = minutesFromClock(dayStart)
-  const endMinutes = minutesFromClock(dayEnd)
-  const start = edge === 'start' ? startMinutes : Math.max(startMinutes, endMinutes - 30)
-  const end = edge === 'start' ? Math.min(endMinutes, startMinutes + 30) : endMinutes
+  const startMinutes = minutesFromClock(dayStart);
+  const endMinutes = minutesFromClock(dayEnd);
+  const start = edge === 'start' ? startMinutes : Math.max(startMinutes, endMinutes - 30);
+  const end = edge === 'start' ? Math.min(endMinutes, startMinutes + 30) : endMinutes;
 
   return {
     placeId: lodging.lodgingPlaceId,
@@ -407,31 +460,37 @@ function lodgingStop(lodging: PlanLodging, edge: 'start' | 'end', dayStart: stri
     startTime: clockFromMinutes(start),
     endTime: clockFromMinutes(Math.max(end, start + 30)),
     travelMinutes: edge === 'start' ? null : 5,
-  }
+  };
 }
 
-function ensureLodgingStops(days: ItineraryDay[], byId: Map<string, PromptPlace>, lodging: PlanLodging, dayStart: string, dayEnd: string) {
+function ensureLodgingStops(
+  days: ItineraryDay[],
+  byId: Map<string, PromptPlace>,
+  lodging: PlanLodging,
+  dayStart: string,
+  dayEnd: string,
+) {
   if (days.length <= 1) {
-    return days
+    return days;
   }
 
   return days.map((day, index) => {
-    const stops = day.stops.filter((stop) => stop.kind !== 'lodging')
-    const isFirst = index === 0
-    const isLast = index === days.length - 1
+    const stops = day.stops.filter((stop) => stop.kind !== 'lodging');
+    const isFirst = index === 0;
+    const isLast = index === days.length - 1;
 
     if (!isFirst) {
-      const insertAt = stops[0]?.kind === 'arrival' ? 1 : 0
-      stops.splice(insertAt, 0, lodgingStop(lodging, 'start', dayStart, dayEnd))
+      const insertAt = stops[0]?.kind === 'arrival' ? 1 : 0;
+      stops.splice(insertAt, 0, lodgingStop(lodging, 'start', dayStart, dayEnd));
     }
 
     if (!isLast) {
-      const insertAt = stops.at(-1)?.kind === 'departure' ? stops.length - 1 : stops.length
-      stops.splice(insertAt, 0, lodgingStop(lodging, 'end', dayStart, dayEnd))
+      const insertAt = stops.at(-1)?.kind === 'departure' ? stops.length - 1 : stops.length;
+      stops.splice(insertAt, 0, lodgingStop(lodging, 'end', dayStart, dayEnd));
     }
 
-    return { ...day, stops: withStopTravel(stops, byId, lodging) }
-  })
+    return { ...day, stops: withStopTravel(stops, byId, lodging) };
+  });
 }
 
 function ensureDailyMeals(
@@ -442,114 +501,114 @@ function ensureDailyMeals(
   dayStart: string,
   dayEnd: string,
 ) {
-  const required = requiredMealKinds(meals)
-  const usedPlaceIds = new Set<string>()
-  const byId = indexPlaces(places)
+  const required = requiredMealKinds(meals);
+  const usedPlaceIds = new Set<string>();
+  const byId = indexPlaces(places);
 
   const cleaned = days.map((day) => {
-    const seenMeals = new Set<MealStopKind>()
-    const stops: ItineraryStop[] = []
+    const seenMeals = new Set<MealStopKind>();
+    const stops: ItineraryStop[] = [];
 
     day.stops.forEach((stop) => {
       if (stop.kind === 'lodging') {
-        usedPlaceIds.add(stop.placeId)
-        stops.push(stop)
-        return
+        usedPlaceIds.add(stop.placeId);
+        stops.push(stop);
+        return;
       }
 
       if (mealStopKinds.includes(stop.kind as MealStopKind)) {
         if (!required.includes(stop.kind as MealStopKind) || seenMeals.has(stop.kind as MealStopKind)) {
-          return
+          return;
         }
 
-        const place = byId.get(stop.placeId)
+        const place = byId.get(stop.placeId);
         const canKeep =
           place &&
           place.category === 'food' &&
           !usedPlaceIds.has(stop.placeId) &&
           !isClosedOnDate(place.closedDays, day.date) &&
-          isOpenAtClock(place.openingHours, place.breakTime, stop.startTime)
+          isOpenAtClock(place.openingHours, place.breakTime, stop.startTime);
 
         if (!canKeep) {
-          return
+          return;
         }
 
-        seenMeals.add(stop.kind as MealStopKind)
-        usedPlaceIds.add(stop.placeId)
-        stops.push(stop)
-        return
+        seenMeals.add(stop.kind as MealStopKind);
+        usedPlaceIds.add(stop.placeId);
+        stops.push(stop);
+        return;
       }
 
       if (stop.kind === 'arrival' || stop.kind === 'departure') {
-        usedPlaceIds.add(stop.placeId)
-        stops.push(stop)
-        return
+        usedPlaceIds.add(stop.placeId);
+        stops.push(stop);
+        return;
       }
 
       if (stop.placeId === lodging.lodgingPlaceId || usedPlaceIds.has(stop.placeId)) {
-        return
+        return;
       }
 
-      usedPlaceIds.add(stop.placeId)
-      stops.push(stop)
-    })
+      usedPlaceIds.add(stop.placeId);
+      stops.push(stop);
+    });
 
-    return { ...day, stops }
-  })
+    return { ...day, stops };
+  });
 
-  const leftoverFoods = places.filter((place) => place.category === 'food' && !usedPlaceIds.has(place.id))
+  const leftoverFoods = places.filter((place) => place.category === 'food' && !usedPlaceIds.has(place.id));
 
   while (leftoverFoods.length > 0) {
-    let pick: { index: number; day: ItineraryDay; kind: MealStopKind; minutes: number } | null = null
+    let pick: { index: number; day: ItineraryDay; kind: MealStopKind; minutes: number } | null = null;
 
     for (let index = 0; index < leftoverFoods.length; index += 1) {
-      const place = leftoverFoods[index]
-      const openDays = cleaned.filter((day) => !isClosedOnDate(place.closedDays, day.date))
-      const nearest = openDays[0]
+      const place = leftoverFoods[index];
+      const openDays = cleaned.filter((day) => !isClosedOnDate(place.closedDays, day.date));
+      const nearest = openDays[0];
 
       if (!nearest) {
-        continue
+        continue;
       }
 
       const closest = openDays.reduce((best, day) => {
-        const nearestMinutes = minutesToDay(place, best, byId, lodging)
-        const dayMinutes = minutesToDay(place, day, byId, lodging)
+        const nearestMinutes = minutesToDay(place, best, byId, lodging);
+        const dayMinutes = minutesToDay(place, day, byId, lodging);
 
         if (dayMinutes < nearestMinutes || (dayMinutes === nearestMinutes && day.day < best.day)) {
-          return day
+          return day;
         }
 
-        return best
-      })
+        return best;
+      });
       const kind = required.find((mealKind) => {
         if (closest.stops.some((stop) => stop.kind === mealKind)) {
-          return false
+          return false;
         }
 
-        return isOpenAtClock(place.openingHours, place.breakTime, mealWindow(mealKind, dayStart, dayEnd).startTime)
-      })
+        return isOpenAtClock(place.openingHours, place.breakTime, mealWindow(mealKind, dayStart, dayEnd).startTime);
+      });
 
       if (!kind) {
-        continue
+        continue;
       }
 
-      const minutes = minutesToDay(place, closest, byId, lodging)
+      const minutes = minutesToDay(place, closest, byId, lodging);
 
       if (!pick || minutes < pick.minutes || (minutes === pick.minutes && closest.day < pick.day.day)) {
-        pick = { index, day: closest, kind, minutes }
+        pick = { index, day: closest, kind, minutes };
       }
     }
 
     if (!pick) {
-      break
+      break;
     }
 
-    const [place] = leftoverFoods.splice(pick.index, 1)
-    usedPlaceIds.add(place.id)
-    insertMealStop(pick.day.stops, mealStop(pick.kind, place, dayStart, dayEnd))
+    const [place] = leftoverFoods.splice(pick.index, 1);
+    usedPlaceIds.add(place.id);
+    insertMealStop(pick.day.stops, mealStop(pick.kind, place, dayStart, dayEnd));
   }
 
-  return cleaned.map((day) => ({ ...day, stops: withStopTravel(day.stops, byId, lodging) }))
+  return cleaned.map((day) => ({ ...day, stops: withStopTravel(day.stops, byId, lodging) }));
 }
 
 function travelPairs(places: PromptPlace[]) {
@@ -559,28 +618,28 @@ function travelPairs(places: PromptPlace[]) {
       to: to.id,
       minutes: travelMinutes(from, to),
     })),
-  )
+  );
 }
 
 function isTime(value: unknown): value is string {
-  return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+  return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
 function isCategory(value: unknown): value is PlaceCategory {
-  return placeCategories.some((category) => category === value)
+  return placeCategories.some((category) => category === value);
 }
 
 function isKind(value: unknown): value is ItineraryStopKind {
-  return itineraryStopKinds.some((kind) => kind === value)
+  return itineraryStopKinds.some((kind) => kind === value);
 }
 
 function toStop(value: unknown, byId: Map<string, PromptPlace>): ItineraryStop | null {
   if (!value || typeof value !== 'object') {
-    return null
+    return null;
   }
 
-  const stop = value as Record<string, unknown>
-  const place = typeof stop.placeId === 'string' ? byId.get(stop.placeId) : undefined
+  const stop = value as Record<string, unknown>;
+  const place = typeof stop.placeId === 'string' ? byId.get(stop.placeId) : undefined;
 
   if (
     !place ||
@@ -588,13 +647,16 @@ function toStop(value: unknown, byId: Map<string, PromptPlace>): ItineraryStop |
     !isTime(stop.startTime) ||
     !isTime(stop.endTime) ||
     stop.startTime >= stop.endTime ||
-    !(stop.travelMinutes === null || (typeof stop.travelMinutes === 'number' && Number.isInteger(stop.travelMinutes) && stop.travelMinutes >= 0))
+    !(
+      stop.travelMinutes === null ||
+      (typeof stop.travelMinutes === 'number' && Number.isInteger(stop.travelMinutes) && stop.travelMinutes >= 0)
+    )
   ) {
-    return null
+    return null;
   }
 
   if (mealStopKinds.includes(stop.kind as MealStopKind) && place.category !== 'food') {
-    return null
+    return null;
   }
 
   return {
@@ -605,29 +667,34 @@ function toStop(value: unknown, byId: Map<string, PromptPlace>): ItineraryStop |
     startTime: stop.startTime,
     endTime: stop.endTime,
     travelMinutes: stop.travelMinutes,
-  }
+  };
 }
 
-function toDays(value: unknown, byId: Map<string, PromptPlace>, dayCount: number, startDate: string): ItineraryDay[] | null {
+function toDays(
+  value: unknown,
+  byId: Map<string, PromptPlace>,
+  dayCount: number,
+  startDate: string,
+): ItineraryDay[] | null {
   if (!Array.isArray(value)) {
-    return null
+    return null;
   }
 
-  const listed = value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+  const listed = value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
 
   return Array.from({ length: dayCount }, (_, index) => {
-    const date = addCalendarDays(startDate, index)
-    const dayNumber = index + 1
-    const match = listed.find((item) => item.day === dayNumber) ?? listed[index]
-    const rawStops = match && Array.isArray(match.stops) ? match.stops : []
-    const stops = rawStops.map((stop) => toStop(stop, byId)).filter((stop): stop is ItineraryStop => Boolean(stop))
+    const date = addCalendarDays(startDate, index);
+    const dayNumber = index + 1;
+    const match = listed.find((item) => item.day === dayNumber) ?? listed[index];
+    const rawStops = match && Array.isArray(match.stops) ? match.stops : [];
+    const stops = rawStops.map((stop) => toStop(stop, byId)).filter((stop): stop is ItineraryStop => Boolean(stop));
 
     if (stops[0] && stops[0].travelMinutes !== null) {
-      stops[0] = { ...stops[0], travelMinutes: null }
+      stops[0] = { ...stops[0], travelMinutes: null };
     }
 
-    return { day: dayNumber, date, stops }
-  })
+    return { day: dayNumber, date, stops };
+  });
 }
 
 export async function requestItinerary({
@@ -644,10 +711,10 @@ export async function requestItinerary({
   departure,
   places,
 }: OptimizeInput): Promise<Itinerary> {
-  const listedPlaces = promptPlaces(places, lodging, arrival, departure)
-  const listedById = indexPlaces(listedPlaces)
-  const dayCount = nights + 1
-  const calendar = tripCalendar(startDate, dayCount)
+  const listedPlaces = promptPlaces(places, lodging, arrival, departure);
+  const listedById = indexPlaces(listedPlaces);
+  const dayCount = nights + 1;
+  const calendar = tripCalendar(startDate, dayCount);
   const request = {
     country,
     region,
@@ -679,53 +746,59 @@ export async function requestItinerary({
     },
     places: listedPlaces,
     travelMinutes: travelPairs(listedPlaces),
-  }
+  };
   const systemPrompt =
-    '여행 일정을 JSON으로만 만든다. 주어진 장소 id만 쓴다. 주머니의 관광지와 맛집 id는 일정 전체에서 한 번만 쓴다. 같은 장소를 여러 끼니나 여러 날에 반복하지 않는다. 장소가 모자라면 끼니나 visit을 생략하고 칸을 비운다. 빈 칸이 있어도 앞날부터 억지로 채우지 말고, travelMinutes와 좌표를 보고 가까운 관광지와 맛집끼리 같은 날에 묶는다. 맛집이 둘째 날 관광지와 더 가까우면 첫째 날 끼니를 비우고 둘째 날에 넣는다. 다른 날 동선과 더 가까운 장소를 빈 칸 메우기용으로 먼 날에 넣지 않는다. 거리가 비슷할 때만 1일차부터 채운다. 1일차는 arrival 다음에 도착 시각 이후 활동 시간이 남아 있고 넣을 장소가 그날 동선과 가까우면 관광지와 맛집을 넣고, 그다음 숙소로 하루를 마친다. 중간 날은 숙소로 시작해 숙소로 끝낸다. 마지막 날은 숙소에서 시작해 departure로 끝낸다. 숙소는 지정된 lodging placeId를 쓰고 visit나 끼니로 쓰지 않으며 여러 날에 반복한다. calendar의 weekdayIndex가 그 장소 closedWeekdays에 있으면 lodging이 아닌 방문으로 넣지 말고, 다른 요일로 옮기거나 일정에서 뺀다. closedEveryDay가 true면 그 장소는 방문하지 않는다. 영업시간과 브레이크 타임을 피한다. 아침 끼니 시각에 문을 연 맛집만 breakfast로 넣고, 저녁에만 여는 식당은 dinner로만 넣는다. 하루 일정은 dayStart와 dayEnd 안에 둔다. 1일차 첫 장소는 arrival이고 숙소로 시작하지 않는다. 마지막 날 마지막 장소는 departure이고 숙소로 끝내지 않는다. includeBreakfast가 true면 가능한 날만 kind=breakfast를 넣고, 쓸 맛집이 없으면 넣지 않는다. includeLunch, includeDinner도 같다. 아침·점심·저녁은 category가 food인 맛집만 쓰고, 카페는 sight이므로 끼니가 아니라 visit로만 넣는다. travelMinutes는 같은 날 바로 앞 장소에서 이동하는 분이고, 하루의 첫 장소는 null이다. 장소 사이 이동은 travelMinutes 목록을 따른다. day는 1부터 시작하고 date는 calendar와 같아야 한다.'
+    '여행 일정을 JSON으로만 만든다. 주어진 장소 id만 쓴다. 주머니의 관광지와 맛집 id는 일정 전체에서 한 번만 쓴다. 같은 장소를 여러 끼니나 여러 날에 반복하지 않는다. 장소가 모자라면 끼니나 visit을 생략하고 칸을 비운다. 빈 칸이 있어도 앞날부터 억지로 채우지 말고, travelMinutes와 좌표를 보고 가까운 관광지와 맛집끼리 같은 날에 묶는다. 맛집이 둘째 날 관광지와 더 가까우면 첫째 날 끼니를 비우고 둘째 날에 넣는다. 다른 날 동선과 더 가까운 장소를 빈 칸 메우기용으로 먼 날에 넣지 않는다. 거리가 비슷할 때만 1일차부터 채운다. 1일차는 arrival 다음에 도착 시각 이후 활동 시간이 남아 있고 넣을 장소가 그날 동선과 가까우면 관광지와 맛집을 넣고, 그다음 숙소로 하루를 마친다. 중간 날은 숙소로 시작해 숙소로 끝낸다. 마지막 날은 숙소에서 시작해 departure로 끝낸다. 숙소는 지정된 lodging placeId를 쓰고 visit나 끼니로 쓰지 않으며 여러 날에 반복한다. calendar의 weekdayIndex가 그 장소 closedWeekdays에 있으면 lodging이 아닌 방문으로 넣지 말고, 다른 요일로 옮기거나 일정에서 뺀다. closedEveryDay가 true면 그 장소는 방문하지 않는다. 영업시간과 브레이크 타임을 피한다. 아침 끼니 시각에 문을 연 맛집만 breakfast로 넣고, 저녁에만 여는 식당은 dinner로만 넣는다. 하루 일정은 dayStart와 dayEnd 안에 둔다. 1일차 첫 장소는 arrival이고 숙소로 시작하지 않는다. 마지막 날 마지막 장소는 departure이고 숙소로 끝내지 않는다. includeBreakfast가 true면 가능한 날만 kind=breakfast를 넣고, 쓸 맛집이 없으면 넣지 않는다. includeLunch, includeDinner도 같다. 아침·점심·저녁은 category가 food인 맛집만 쓰고, 카페는 sight이므로 끼니가 아니라 visit로만 넣는다. travelMinutes는 같은 날 바로 앞 장소에서 이동하는 분이고, 하루의 첫 장소는 null이다. 장소 사이 이동은 travelMinutes 목록을 따른다. day는 1부터 시작하고 date는 calendar와 같아야 한다.';
 
   async function complete(messages: Array<{ role: 'system' | 'user'; content: string }>) {
-    const content = await completeOpenAI(messages)
+    const content = await completeOpenAI(messages);
 
     if (typeof content !== 'string') {
-      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
 
-    let parsed: { days?: unknown }
+    let parsed: { days?: unknown };
 
     try {
-      parsed = JSON.parse(content) as { days?: unknown }
+      parsed = JSON.parse(content) as { days?: unknown };
     } catch {
-      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
 
-    const days = toDays(parsed.days, listedById, dayCount, startDate)
+    const days = toDays(parsed.days, listedById, dayCount, startDate);
 
     if (!days) {
-      throw new Error('최적화 결과가 여행 조건과 맞지 않아요. 잠시 후 다시 시도해 주세요.')
+      throw new Error('최적화 결과가 여행 조건과 맞지 않아요. 잠시 후 다시 시도해 주세요.');
     }
 
-    return days
+    return days;
   }
 
   try {
     const baseMessages: Array<{ role: 'system' | 'user'; content: string }> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: JSON.stringify(request) },
-    ]
+    ];
     const shapedDays = (days: ItineraryDay[]) =>
       ensureDailyMeals(
-        ensureLodgingStops(ensureTripAnchors(days, listedById, lodging, arrival, departure), listedById, lodging, dayStart, dayEnd),
+        ensureLodgingStops(
+          ensureTripAnchors(days, listedById, lodging, arrival, departure),
+          listedById,
+          lodging,
+          dayStart,
+          dayEnd,
+        ),
         listedPlaces,
         lodging,
         meals,
         dayStart,
         dayEnd,
-      )
-    const firstDays = shapedDays(await complete(baseMessages))
-    const firstViolations = closedDayViolations(firstDays, listedPlaces)
+      );
+    const firstDays = shapedDays(await complete(baseMessages));
+    const firstViolations = closedDayViolations(firstDays, listedPlaces);
 
     if (firstViolations.length === 0) {
-      return { planId, days: firstDays }
+      return { planId, days: firstDays };
     }
 
     const retryDays = shapedDays(
@@ -736,33 +809,33 @@ export async function requestItinerary({
           content: `잘못된 일정이다. 휴무일에 넣은 장소를 다른 요일로 옮기거나 빼서 다시 만들어라. 관광지와 맛집은 일정 전체에서 한 번만 쓰고, 모자라면 끼니나 방문을 생략하라. 빈 칸을 앞날부터 억지로 채우지 말고 가까운 관광지와 맛집끼리 같은 날에 묶어라. 다른 날 방문지와 더 가까운 맛집은 그쪽 날에 넣어라. 1일차는 arrival로 시작하고 마지막 날은 departure로 끝내라.\n${firstViolations.join('\n')}`,
         },
       ]),
-    )
-    const retryViolations = closedDayViolations(retryDays, listedPlaces)
+    );
+    const retryViolations = closedDayViolations(retryDays, listedPlaces);
 
     if (retryViolations.length > 0) {
-      throw new Error('휴무일인 장소가 일정에 남아 있어요. 다시 시도해 주세요.')
+      throw new Error('휴무일인 장소가 일정에 남아 있어요. 다시 시도해 주세요.');
     }
 
-    return { planId, days: retryDays }
+    return { planId, days: retryDays };
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      throw new Error('OpenAI API 키를 설정해 주세요.')
+      throw new Error('OpenAI API 키를 설정해 주세요.', { cause: error });
     }
 
     if (error instanceof Error && !axios.isAxiosError(error)) {
-      throw error
+      throw error;
     }
 
-    throw new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    throw new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.', { cause: error });
   }
 }
 
 function itineraryCollection(planId: string) {
-  return collection(db, 'plans', planId, 'itinerary')
+  return collection(db, 'plans', planId, 'itinerary');
 }
 
 function stopDocId(day: number, order: number) {
-  return `${String(day).padStart(2, '0')}-${String(order).padStart(2, '0')}`
+  return `${String(day).padStart(2, '0')}-${String(order).padStart(2, '0')}`;
 }
 
 async function completeOpenAI(messages: Array<{ role: 'system' | 'user'; content: string }>) {
@@ -770,32 +843,35 @@ async function completeOpenAI(messages: Array<{ role: 'system' | 'user'; content
     model,
     messages,
     schema: itinerarySchema,
-  }
+  };
 
   try {
-    const openaiChat = httpsCallable<typeof payload, { content: string }>(functions, 'openaiChat')
-    const result = await openaiChat(payload)
-    const content = result.data?.content
+    const openaiChat = httpsCallable<typeof payload, { content: string }>(functions, 'openaiChat');
+    const result = await openaiChat(payload);
+    const content = result.data?.content;
 
     if (typeof content !== 'string') {
-      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
 
-    return content
+    return content;
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : ''
-    const canUseDevProxy = import.meta.env.DEV && (code.includes('not-found') || code.includes('unavailable') || code.includes('internal'))
+    const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
+    const canUseDevProxy =
+      import.meta.env.DEV && (code.includes('not-found') || code.includes('unavailable') || code.includes('internal'));
 
     if (!canUseDevProxy) {
       if (code.includes('unauthenticated')) {
-        throw new Error('로그인된 사용자가 없습니다.')
+        throw new Error('로그인된 사용자가 없습니다.', { cause: error });
       }
 
       if (code.includes('failed-precondition')) {
-        throw new Error('OpenAI API 키를 설정해 주세요.')
+        throw new Error('OpenAI API 키를 설정해 주세요.', { cause: error });
       }
 
-      throw error instanceof Error ? error : new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      throw error instanceof Error
+        ? error
+        : new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.', { cause: error });
     }
 
     const response = await axios.post(
@@ -814,26 +890,26 @@ async function completeOpenAI(messages: Array<{ role: 'system' | 'user'; content
         },
       },
       { timeout: 60000 },
-    )
-    const content = response.data?.choices?.[0]?.message?.content
+    );
+    const content = response.data?.choices?.[0]?.message?.content;
 
     if (typeof content !== 'string') {
-      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.', { cause: error });
     }
 
-    return content
+    return content;
   }
 }
 
 export async function saveItinerary(itinerary: Itinerary) {
-  requireUser()
+  requireUser();
 
-  const existing = await getDocs(itineraryCollection(itinerary.planId))
-  const operations: Array<(batch: WriteBatch) => void> = existing.docs.map((item) => (batch) => batch.delete(item.ref))
+  const existing = await getDocs(itineraryCollection(itinerary.planId));
+  const operations: Array<(batch: WriteBatch) => void> = existing.docs.map((item) => (batch) => batch.delete(item.ref));
 
   itinerary.days.forEach((day) => {
     day.stops.forEach((stop, order) => {
-      const ref = doc(itineraryCollection(itinerary.planId), stopDocId(day.day, order))
+      const ref = doc(itineraryCollection(itinerary.planId), stopDocId(day.day, order));
       const data = {
         planId: itinerary.planId,
         day: day.day,
@@ -846,18 +922,20 @@ export async function saveItinerary(itinerary: Itinerary) {
         startTime: stop.startTime,
         endTime: stop.endTime,
         travelMinutes: stop.travelMinutes,
-      }
-      operations.push((batch) => batch.set(ref, data))
-    })
-  })
+      };
+      operations.push((batch) => batch.set(ref, data));
+    });
+  });
 
-  const updatedAt = new Date().toISOString()
-  const planRef = doc(db, 'plans', itinerary.planId)
-  await commitBatched(operations, (batch) => batch.update(planRef, { status: 'optimized', updatedAt }))
-  return updatedAt
+  const updatedAt = new Date().toISOString();
+  const planRef = doc(db, 'plans', itinerary.planId);
+  await commitBatched(operations, (batch) => batch.update(planRef, { status: 'optimized', updatedAt }));
+  return updatedAt;
 }
 
-function savedStop(data: Record<string, unknown>): (ItineraryStop & { day: number; date: string; order: number }) | null {
+function savedStop(
+  data: Record<string, unknown>,
+): (ItineraryStop & { day: number; date: string; order: number }) | null {
   if (
     typeof data.day !== 'number' ||
     typeof data.date !== 'string' ||
@@ -870,7 +948,7 @@ function savedStop(data: Record<string, unknown>): (ItineraryStop & { day: numbe
     !isTime(data.endTime) ||
     !(data.travelMinutes === null || typeof data.travelMinutes === 'number')
   ) {
-    return null
+    return null;
   }
 
   return {
@@ -884,28 +962,28 @@ function savedStop(data: Record<string, unknown>): (ItineraryStop & { day: numbe
     startTime: data.startTime,
     endTime: data.endTime,
     travelMinutes: data.travelMinutes,
-  }
+  };
 }
 
 export async function getItinerary(planId: string): Promise<Itinerary | null> {
-  requireUser()
+  requireUser();
 
-  const snapshot = await getDocs(itineraryCollection(planId))
+  const snapshot = await getDocs(itineraryCollection(planId));
   const stops = snapshot.docs
     .flatMap((item) => {
-      const stop = savedStop(item.data())
-      return stop ? [stop] : []
+      const stop = savedStop(item.data());
+      return stop ? [stop] : [];
     })
-    .sort((left, right) => left.day - right.day || left.order - right.order)
+    .sort((left, right) => left.day - right.day || left.order - right.order);
 
   if (stops.length === 0) {
-    return null
+    return null;
   }
 
-  const days: ItineraryDay[] = []
+  const days: ItineraryDay[] = [];
 
   stops.forEach((stop) => {
-    const current = days.at(-1)
+    const current = days.at(-1);
     const nextStop = {
       placeId: stop.placeId,
       name: stop.name,
@@ -914,15 +992,15 @@ export async function getItinerary(planId: string): Promise<Itinerary | null> {
       startTime: stop.startTime,
       endTime: stop.endTime,
       travelMinutes: stop.travelMinutes,
-    }
+    };
 
     if (current && current.day === stop.day) {
-      current.stops.push(nextStop)
-      return
+      current.stops.push(nextStop);
+      return;
     }
 
-    days.push({ day: stop.day, date: stop.date, stops: [nextStop] })
-  })
+    days.push({ day: stop.day, date: stop.date, stops: [nextStop] });
+  });
 
-  return { planId, days }
+  return { planId, days };
 }

@@ -1,16 +1,16 @@
-import type { ReactNode } from 'react'
-import chevron from '../assets/login-chevron.svg'
-import dot from '../assets/login-dot.svg'
-import river from '../assets/login-river.svg'
-import route from '../assets/login-route.svg'
-import sparkles from '../assets/login-sparkles.svg'
-import sparklesSmall from '../assets/login-sparkles-small.svg'
+import type { ReactNode } from 'react';
+import chevron from '../assets/login-chevron.svg';
+import dot from '../assets/login-dot.svg';
+import river from '../assets/login-river.svg';
+import route from '../assets/login-route.svg';
+import sparkles from '../assets/login-sparkles.svg';
+import sparklesSmall from '../assets/login-sparkles-small.svg';
 
 const places = [
   { number: '1', name: '가고 싶은 곳', className: 'login-place-1' },
   { number: '2', name: '맛있는 한 끼', className: 'login-place-2' },
   { number: '3', name: '쉬어가는 곳', className: 'login-place-3' },
-]
+];
 
 function LoginIntro({
   title = (
@@ -21,7 +21,7 @@ function LoginIntro({
     </>
   ),
 }: {
-  title?: ReactNode
+  title?: ReactNode;
 }) {
   return (
     <aside className="login-intro">
@@ -76,7 +76,7 @@ function LoginIntro({
       </ul>
       <p className="login-intro-promise">의외로 쉬운 여행, 의외로 쉬운 행복</p>
     </aside>
-  )
+  );
 }
 
-export default LoginIntro
+export default LoginIntro;

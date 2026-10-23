@@ -1,13 +1,13 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { FirebaseError } from 'firebase/app'
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
-import { z } from 'zod'
-import { signUp } from '../api/auth'
-import arrowRight from '../assets/arrow-right.svg'
-import eyeOff from '../assets/eye-off.svg'
-import LoginIntro from '../components/LoginIntro'
+import { zodResolver } from '@hookform/resolvers/zod';
+import { FirebaseError } from 'firebase/app';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
+import { z } from 'zod';
+import { signUp } from '../api/auth';
+import arrowRight from '../assets/arrow-right.svg';
+import eyeOff from '../assets/eye-off.svg';
+import LoginIntro from '../components/LoginIntro';
 
 const signUpSchema = z
   .object({
@@ -28,26 +28,26 @@ const signUpSchema = z
   .refine((values) => values.agreed, {
     path: ['agreed'],
     message: '이용약관 및 개인정보 수집·이용에 동의해 주세요.',
-  })
+  });
 
-type SignUpForm = z.infer<typeof signUpSchema>
+type SignUpForm = z.infer<typeof signUpSchema>;
 
 function getSignUpErrorMessage(error: unknown) {
   if (error instanceof FirebaseError && error.code === 'auth/network-request-failed') {
-    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    return '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   if (error instanceof FirebaseError && error.code === 'auth/email-already-in-use') {
-    return '이미 가입된 이메일입니다.'
+    return '이미 가입된 이메일입니다.';
   }
 
-  return '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  return '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.';
 }
 
 function SignUpPage() {
-  const navigate = useNavigate()
-  const [showPassword, setShowPassword] = useState(false)
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const {
     register,
     handleSubmit,
@@ -57,16 +57,16 @@ function SignUpPage() {
   } = useForm<SignUpForm>({
     resolver: zodResolver(signUpSchema),
     defaultValues: { agreed: false },
-  })
+  });
 
   async function onSubmit(values: SignUpForm) {
-    clearErrors('root')
+    clearErrors('root');
 
     try {
-      await signUp({ email: values.email, password: values.password })
-      navigate('/login', { replace: true })
+      await signUp({ email: values.email, password: values.password });
+      navigate('/login', { replace: true });
     } catch (error) {
-      setError('root', { message: getSignUpErrorMessage(error) })
+      setError('root', { message: getSignUpErrorMessage(error) });
     }
   }
 
@@ -111,7 +111,9 @@ function SignUpPage() {
                 placeholder="비밀번호를 만들어 주세요"
                 autoComplete="new-password"
                 aria-invalid={Boolean(errors.password)}
-                aria-describedby={errors.password ? 'signup-password-error signup-password-hint' : 'signup-password-hint'}
+                aria-describedby={
+                  errors.password ? 'signup-password-error signup-password-hint' : 'signup-password-hint'
+                }
                 {...register('password')}
               />
               <button
@@ -199,7 +201,7 @@ function SignUpPage() {
         </p>
       </div>
     </section>
-  )
+  );
 }
 
-export default SignUpPage
+export default SignUpPage;

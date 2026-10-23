@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect } from 'react'
-import { privacyPolicy, termsPolicy, type Policy } from '../data/policies'
+import { useEffect, useLayoutEffect } from 'react';
+import { privacyPolicy, termsPolicy, type Policy } from '../data/policies';
 
 const policies = {
   terms: termsPolicy,
   privacy: privacyPolicy,
-} as const
+} as const;
 
 type PolicyPageProps = {
-  kind: keyof typeof policies
-}
+  kind: keyof typeof policies;
+};
 
 function PolicyArticle({ policy }: { policy: Policy }) {
   return (
@@ -26,28 +26,28 @@ function PolicyArticle({ policy }: { policy: Policy }) {
         </article>
       ))}
     </section>
-  )
+  );
 }
 
 function scrollPolicyToNav() {
   if (!window.matchMedia('(max-width: 768px)').matches) {
-    return
+    return;
   }
 
-  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
 
 function PolicyPage({ kind }: PolicyPageProps) {
   useLayoutEffect(() => {
-    scrollPolicyToNav()
-  }, [kind])
+    scrollPolicyToNav();
+  }, [kind]);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(scrollPolicyToNav)
-    return () => window.cancelAnimationFrame(frame)
-  }, [kind])
+    const frame = window.requestAnimationFrame(scrollPolicyToNav);
+    return () => window.cancelAnimationFrame(frame);
+  }, [kind]);
 
-  return <PolicyArticle policy={policies[kind]} />
+  return <PolicyArticle policy={policies[kind]} />;
 }
 
-export default PolicyPage
+export default PolicyPage;

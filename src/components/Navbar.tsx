@@ -1,16 +1,16 @@
-import { Link, useNavigate } from 'react-router'
-import { logout } from '../api/auth'
-import gnbLogo from '../assets/gnb-logo.svg'
-import { useAuth } from '../contexts/AuthContext'
+import { Link, useNavigate } from 'react-router';
+import { logout } from '../api/auth';
+import gnbLogo from '../assets/gnb-logo.svg';
+import { useAuth } from '../contexts/AuthContext';
 
 function Navbar() {
-  const navigate = useNavigate()
-  const { user, isLoggedIn } = useAuth()
-  const userLabel = user?.displayName || user?.email || '여행자님'
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const userLabel = user?.displayName || user?.email || '여행자님';
 
   async function handleLogout() {
-    await logout()
-    navigate('/login', { replace: true })
+    await logout();
+    navigate('/login', { replace: true });
   }
 
   return (
@@ -39,7 +39,7 @@ function Navbar() {
         )}
       </div>
     </header>
-  )
+  );
 }
 
-export default Navbar
+export default Navbar;

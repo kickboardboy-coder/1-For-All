@@ -552,12 +552,30 @@ body {
   background: #e8f4ef;
 }
 
-.plans-block-a { top: 10px; left: 10px; }
-.plans-block-b { top: 58px; left: 10px; }
-.plans-block-c { top: 10px; left: 62px; }
-.plans-block-d { top: 58px; left: 62px; }
-.plans-block-e { top: 10px; left: 114px; }
-.plans-block-f { top: 58px; left: 114px; }
+.plans-block-a {
+  top: 10px;
+  left: 10px;
+}
+.plans-block-b {
+  top: 58px;
+  left: 10px;
+}
+.plans-block-c {
+  top: 10px;
+  left: 62px;
+}
+.plans-block-d {
+  top: 58px;
+  left: 62px;
+}
+.plans-block-e {
+  top: 10px;
+  left: 114px;
+}
+.plans-block-f {
+  top: 58px;
+  left: 114px;
+}
 
 .plans-park {
   position: absolute;
@@ -1097,8 +1115,8 @@ body {
   outline-offset: 2px;
 }
 
-.planner-time button[aria-invalid="true"],
-.planner-query input[aria-invalid="true"] {
+.planner-time button[aria-invalid='true'],
+.planner-query input[aria-invalid='true'] {
   box-shadow: inset 0 0 0 1px #c4514a;
 }
 
@@ -2324,18 +2342,54 @@ body {
   background: #e8f4ef;
 }
 
-.login-map-block-1 { left: 19px; top: 19px; }
-.login-map-block-2 { left: 19px; top: 105px; }
-.login-map-block-3 { left: 19px; top: 191px; }
-.login-map-block-4 { left: 117px; top: 19px; }
-.login-map-block-5 { left: 117px; top: 105px; }
-.login-map-block-6 { left: 117px; top: 191px; }
-.login-map-block-7 { left: 215px; top: 19px; }
-.login-map-block-8 { left: 215px; top: 105px; }
-.login-map-block-9 { left: 215px; top: 191px; }
-.login-map-block-10 { left: 313px; top: 19px; }
-.login-map-block-11 { left: 313px; top: 105px; }
-.login-map-block-12 { left: 313px; top: 191px; }
+.login-map-block-1 {
+  left: 19px;
+  top: 19px;
+}
+.login-map-block-2 {
+  left: 19px;
+  top: 105px;
+}
+.login-map-block-3 {
+  left: 19px;
+  top: 191px;
+}
+.login-map-block-4 {
+  left: 117px;
+  top: 19px;
+}
+.login-map-block-5 {
+  left: 117px;
+  top: 105px;
+}
+.login-map-block-6 {
+  left: 117px;
+  top: 191px;
+}
+.login-map-block-7 {
+  left: 215px;
+  top: 19px;
+}
+.login-map-block-8 {
+  left: 215px;
+  top: 105px;
+}
+.login-map-block-9 {
+  left: 215px;
+  top: 191px;
+}
+.login-map-block-10 {
+  left: 313px;
+  top: 19px;
+}
+.login-map-block-11 {
+  left: 313px;
+  top: 105px;
+}
+.login-map-block-12 {
+  left: 313px;
+  top: 191px;
+}
 
 .login-map-park {
   left: 39px;
@@ -2372,9 +2426,18 @@ body {
   gap: 6px;
 }
 
-.login-place-1 { left: 19px; top: 155px; }
-.login-place-2 { left: 105px; top: 48px; }
-.login-place-3 { left: 275px; top: 97px; }
+.login-place-1 {
+  left: 19px;
+  top: 155px;
+}
+.login-place-2 {
+  left: 105px;
+  top: 48px;
+}
+.login-place-3 {
+  left: 275px;
+  top: 97px;
+}
 
 .login-place-pin {
   display: flex;
@@ -2516,7 +2579,7 @@ body {
   font-weight: 400;
 }
 
-.login-field input[aria-invalid="true"] {
+.login-field input[aria-invalid='true'] {
   border-color: #c4514a;
   background: #fbf4f3;
 }
@@ -3583,4 +3646,3 @@ body {
     gap: 10px;
   }
 }
-

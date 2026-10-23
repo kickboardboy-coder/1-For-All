@@ -1,10 +1,10 @@
 type EmptyStateProps = {
-  title: string
-  description: string
-  icon?: string
-  actionLabel?: string
-  onAction?: () => void
-}
+  title: string;
+  description: string;
+  icon?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+};
 
 function EmptyState({ title, description, icon, actionLabel, onAction }: EmptyStateProps) {
   return (
@@ -18,7 +18,7 @@ function EmptyState({ title, description, icon, actionLabel, onAction }: EmptySt
         </button>
       )}
     </div>
-  )
+  );
 }
 
-export default EmptyState
+export default EmptyState;

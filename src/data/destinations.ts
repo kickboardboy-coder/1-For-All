@@ -43,15 +43,15 @@ export const destinations = [
       { name: '치앙마이', latitude: 18.7883, longitude: 98.9853, landmark: '왓 프라탓 도이수텝' },
     ],
   },
-] as const
+] as const;
 
-export type DestinationCountry = (typeof destinations)[number]['country']
+export type DestinationCountry = (typeof destinations)[number]['country'];
 
 export function findRegion(country: string | null | undefined, region: string | null | undefined) {
   if (!country || !region) {
-    return null
+    return null;
   }
 
-  const destination = destinations.find((item) => item.country === country)
-  return destination?.regions.find((item) => item.name === region) ?? null
+  const destination = destinations.find((item) => item.country === country);
+  return destination?.regions.find((item) => item.name === region) ?? null;
 }
