@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { findRegion } from '../data/destinations'
 
@@ -66,4 +66,4 @@ function RegionThumb({ country, region }: RegionThumbProps) {
   )
 }
 
-export default RegionThumb
+export default memo(RegionThumb)

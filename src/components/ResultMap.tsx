@@ -207,7 +207,7 @@ function ResultMap({ latitude, longitude, zoom, routes }: ResultMapProps) {
 
           return markers.map((stop, index) => (
             <Marker
-              key={`${route.day}-${stop.placeId}-${stop.label}-${index}`}
+              key={`${route.day}-${stop.placeId}-${stop.label}`}
               position={{ lat: stop.latitude, lng: stop.longitude }}
               title={`${route.day}일차 · ${stop.label} ${stop.name}`}
               label={{

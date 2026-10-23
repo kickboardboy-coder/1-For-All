@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Link } from 'react-router'
 import RegionThumb from './RegionThumb'
 import { planStatusLabel, type Plan } from '../types/plan'
@@ -91,4 +92,4 @@ function PlanCard({ plan, isRecent, placeCount, isDeleting, onDelete }: PlanCard
   )
 }
 
-export default PlanCard
+export default memo(PlanCard)

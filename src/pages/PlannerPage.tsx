@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import plannerArrow from '../assets/planner-arrow.svg'
 import plannerBag from '../assets/planner-bag.svg'
@@ -105,6 +105,76 @@ function completeTransit(form: TransitForm, pocket: Place[], saved: PlanTransit 
 
   return null
 }
+
+const SearchResultItem = memo(function SearchResultItem({
+  result,
+  index,
+  selected,
+  onSelect,
+}: {
+  result: PlaceSearchResult
+  index: number
+  selected: boolean
+  onSelect: (placeId: string) => void
+}) {
+  return (
+    <li>
+      <button type="button" className={selected ? 'is-selected' : undefined} onClick={() => onSelect(result.id)}>
+        <span>{index + 1}</span>
+        <span>
+          <strong>{result.name}</strong>
+          {result.address && <small>{result.address}</small>}
+        </span>
+      </button>
+    </li>
+  )
+})
+
+const PocketPlaceItem = memo(function PocketPlaceItem({
+  place,
+  index,
+  region,
+  selected,
+  isUpdating,
+  onSelect,
+  onDelete,
+}: {
+  place: Place
+  index: number
+  region: string
+  selected: boolean
+  isUpdating: boolean
+  onSelect: (place: Place) => void
+  onDelete: (placeId: string) => void
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={selected ? 'planner-place-item is-selected' : 'planner-place-item'}
+        aria-label={`${place.name} 지도에서 보기`}
+        aria-pressed={selected}
+        onClick={() => onSelect(place)}
+      >
+        <div className="planner-place-thumb" aria-hidden="true">
+          {place.photoUrl && <img src={place.photoUrl} alt="" />}
+          <span>{index + 1}</span>
+        </div>
+        <div className="planner-place-copy">
+          <strong>{place.name}</strong>
+          <p>
+            {placeCategoryLabel[placeRole(place)]}
+            {region ? ` · ${region}` : ''}
+          </p>
+          <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
+        </div>
+      </button>
+      <button type="button" disabled={isUpdating} aria-label={`${place.name} 빼기`} onClick={() => onDelete(place.id)}>
+        <img src={plannerClose} alt="" />
+      </button>
+    </li>
+  )
+})
 
 function asMapPlace(place: Place): PlaceSearchResult {
   return {
@@ -274,6 +344,64 @@ function PlannerPage() {
     .filter((part): part is string => Boolean(part))
     .join(', ')
     .concat('가 부족합니다')
+
+  const savedPlaceNames = useMemo(() => places.map((place) => place.name), [places])
+
+  const selectSearchResult = useCallback((placeId: string) => {
+    setSelectedPlaceId(placeId)
+    setMapFocus('place')
+  }, [])
+
+  const selectPocketPlace = useCallback((place: Place) => {
+    setPinnedPlace(asMapPlace(place))
+    setSelectedPlaceId(place.id)
+    setMapFocus('place')
+  }, [])
+
+  const handleDeletePlace = useCallback(async (placeId: string) => {
+    if (!planId) {
+      return
+    }
+
+    setIsUpdatingPlaces(true)
+    setError('')
+
+    try {
+      await deletePlace(planId, placeId)
+      setPlaces((current) => current.filter((place) => place.id !== placeId))
+      showToast('주머니에서 빼 두었어요.')
+
+      setPinnedPlace((current) => {
+        if (current?.id !== placeId) {
+          return current
+        }
+
+        setSelectedPlaceId((selected) => (selected === placeId ? null : selected))
+        return null
+      })
+
+      if (lodging?.lodgingPlaceId === placeId) {
+        const updatedAt = await updatePlanLodging(planId, null)
+        setLodging(null)
+        setPlan((current) =>
+          current
+            ? {
+                ...current,
+                lodgingPlaceId: null,
+                lodgingName: null,
+                lodgingLatitude: null,
+                lodgingLongitude: null,
+                updatedAt,
+              }
+            : current,
+        )
+      }
+    } catch {
+      setError('장소를 빼지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsUpdatingPlaces(false)
+    }
+  }, [lodging?.lodgingPlaceId, planId, showToast])
 
   useEffect(() => {
     if (error) {
@@ -731,48 +859,6 @@ function PlannerPage() {
 
   async function handleAddToPocket(result: PlaceSearchResult) {
     await addResultToPocket(result)
-  }
-
-  async function handleDeletePlace(placeId: string) {
-    if (!planId) {
-      return
-    }
-
-    setIsUpdatingPlaces(true)
-    setError('')
-
-    try {
-      await deletePlace(planId, placeId)
-      const nextPlaces = places.filter((place) => place.id !== placeId)
-      setPlaces(nextPlaces)
-      showToast('주머니에서 빼 두었어요.')
-
-      if (pinnedPlace?.id === placeId) {
-        setPinnedPlace(null)
-        setSelectedPlaceId((current) => (current === placeId ? null : current))
-      }
-
-      if (lodging?.lodgingPlaceId === placeId) {
-        const updatedAt = await updatePlanLodging(planId, null)
-        setLodging(null)
-        setPlan((current) =>
-          current
-            ? {
-                ...current,
-                lodgingPlaceId: null,
-                lodgingName: null,
-                lodgingLatitude: null,
-                lodgingLongitude: null,
-                updatedAt,
-              }
-            : current,
-        )
-      }
-    } catch {
-      setError('장소를 빼지 못했습니다. 잠시 후 다시 시도해 주세요.')
-    } finally {
-      setIsUpdatingPlaces(false)
-    }
   }
 
   async function handleClearPlaces() {
@@ -1364,7 +1450,7 @@ function PlannerPage() {
                 setMapFocus('place')
               }
             }}
-            savedPlaceNames={places.map((place) => place.name)}
+            savedPlaceNames={savedPlaceNames}
             isAddingPlace={isUpdatingPlaces}
             onAddPlace={handleAddToPocket}
           />
@@ -1379,22 +1465,13 @@ function PlannerPage() {
             {searchResults.length > 0 && (
               <ul className="planner-search-results">
                 {searchResults.map((result, index) => (
-                  <li key={result.id}>
-                    <button
-                      type="button"
-                      className={result.id === selectedPlaceId ? 'is-selected' : undefined}
-                      onClick={() => {
-                        setSelectedPlaceId(result.id)
-                        setMapFocus('place')
-                      }}
-                    >
-                      <span>{index + 1}</span>
-                      <span>
-                        <strong>{result.name}</strong>
-                        {result.address && <small>{result.address}</small>}
-                      </span>
-                    </button>
-                  </li>
+                  <SearchResultItem
+                    key={result.id}
+                    result={result}
+                    index={index}
+                    selected={result.id === selectedPlaceId}
+                    onSelect={selectSearchResult}
+                  />
                 ))}
               </ul>
             )}
@@ -1430,40 +1507,16 @@ function PlannerPage() {
           ) : (
             <ul className="planner-places">
               {places.map((place, index) => (
-                <li key={place.id}>
-                  <button
-                    type="button"
-                    className={place.id === pinnedPlace?.id ? 'planner-place-item is-selected' : 'planner-place-item'}
-                    aria-label={`${place.name} 지도에서 보기`}
-                    aria-pressed={place.id === pinnedPlace?.id}
-                    onClick={() => {
-                      setPinnedPlace(asMapPlace(place))
-                      setSelectedPlaceId(place.id)
-                      setMapFocus('place')
-                    }}
-                  >
-                    <div className="planner-place-thumb" aria-hidden="true">
-                      {place.photoUrl && <img src={place.photoUrl} alt="" />}
-                      <span>{index + 1}</span>
-                    </div>
-                    <div className="planner-place-copy">
-                      <strong>{place.name}</strong>
-                      <p>
-                        {placeCategoryLabel[placeRole(place)]}
-                        {activeRegion ? ` · ${activeRegion}` : ''}
-                      </p>
-                      <p className="planner-place-hours">{formatPlaceSchedule(place)}</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isUpdatingPlaces}
-                    aria-label={`${place.name} 빼기`}
-                    onClick={() => handleDeletePlace(place.id)}
-                  >
-                    <img src={plannerClose} alt="" />
-                  </button>
-                </li>
+                <PocketPlaceItem
+                  key={place.id}
+                  place={place}
+                  index={index}
+                  region={activeRegion}
+                  selected={place.id === pinnedPlace?.id}
+                  isUpdating={isUpdatingPlaces}
+                  onSelect={selectPocketPlace}
+                  onDelete={handleDeletePlace}
+                />
               ))}
             </ul>
           )}

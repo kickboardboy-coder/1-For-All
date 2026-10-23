@@ -167,18 +167,20 @@ function PlansPage() {
             onAction={() => navigate('/planner/new')}
           />
         )}
-        <MapsProvider>
-          {plans.map((plan, index) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              isRecent={index === 0}
-              placeCount={placeCounts[plan.id] ?? 0}
-              isDeleting={isDeletingPlan && planToDelete?.id === plan.id}
-              onDelete={setPlanToDelete}
-            />
-          ))}
-        </MapsProvider>
+        {plans.length > 0 && (
+          <MapsProvider>
+            {plans.map((plan, index) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                isRecent={index === 0}
+                placeCount={placeCounts[plan.id] ?? 0}
+                isDeleting={isDeletingPlan && planToDelete?.id === plan.id}
+                onDelete={setPlanToDelete}
+              />
+            ))}
+          </MapsProvider>
+        )}
       </div>
       <p className="plans-note">
         <img src={planCloud} alt="" />

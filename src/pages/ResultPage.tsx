@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { driveSpeedKmh, getItinerary, saveItinerary, travelMinutes, walkSpeedKmh } from '../api/itinerary'
 import { getPlan, isTransitMode, markPlanSaved, transitModeLabel } from '../api/plans'
@@ -60,10 +60,10 @@ function cloneItinerary(itinerary: Itinerary): Itinerary {
 
 function stopCoords(
   stop: ItineraryStop,
-  places: Place[],
+  placeById: Map<string, Place>,
   extras: Array<{ placeId: string; latitude: number; longitude: number }>,
 ) {
-  const place = places.find((item) => item.id === stop.placeId)
+  const place = placeById.get(stop.placeId)
 
   if (place) {
     return { latitude: place.latitude, longitude: place.longitude }
@@ -75,7 +75,7 @@ function stopCoords(
 
 function withTravelTimes(
   stops: ItineraryStop[],
-  places: Place[],
+  placeById: Map<string, Place>,
   extras: Array<{ placeId: string; latitude: number; longitude: number }>,
 ) {
   return stops.map((stop, index) => {
@@ -83,8 +83,8 @@ function withTravelTimes(
       return { ...stop, travelMinutes: null }
     }
 
-    const from = stopCoords(stops[index - 1], places, extras)
-    const to = stopCoords(stop, places, extras)
+    const from = stopCoords(stops[index - 1], placeById, extras)
+    const to = stopCoords(stop, placeById, extras)
 
     if (!from || !to) {
       return stop
@@ -269,6 +269,8 @@ function ResultPage() {
     }
   }, [planId])
 
+  const placeById = useMemo(() => new Map(places.map((place) => [place.id, place])), [places])
+
   useEffect(() => {
     if (isLoading || !plan || plan.status !== 'optimized') {
       return
@@ -406,7 +408,7 @@ function ResultPage() {
             return day
           }
 
-          return { ...day, stops: withTravelTimes(updater(day.stops), places, mapHubs) }
+          return { ...day, stops: withTravelTimes(updater(day.stops), placeById, mapHubs) }
         }),
       }
     })
@@ -718,17 +720,17 @@ function ResultPage() {
                   </div>
                   <ol>
                     {day.stops.map((stop, index) => {
-                      const place = places.find((item) => item.id === stop.placeId)
+                      const place = placeById.get(stop.placeId)
                       const previous = day.stops[index - 1]
                       const travel = previous
-                        ? formatTravelModes(stopCoords(previous, places, mapHubs), stopCoords(stop, places, mapHubs))
+                        ? formatTravelModes(stopCoords(previous, placeById, mapHubs), stopCoords(stop, placeById, mapHubs))
                         : null
                       const isNamedStop = stop.kind !== 'visit'
                       const label = itineraryStopBadge(stop.kind, stop.kind === 'visit' ? ++visitNumber : visitNumber)
 
                       return (
                         <li
-                          key={`${stop.placeId}-${stop.startTime}-${index}`}
+                          key={`${stop.kind}-${stop.placeId}-${stop.startTime}`}
                           data-day={day.day}
                           data-stop-index={index}
                         >
