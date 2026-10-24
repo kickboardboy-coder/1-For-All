@@ -16,6 +16,8 @@ dist-ssr
 .env
 *.env
 *.env.*
+*firebase-adminsdk*.json
+*-credentials.json
 
 # Firebase agent skill manuals
 .agents/
