@@ -1,5 +1,4 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export const config = {
   maxDuration: 60,
@@ -11,6 +10,10 @@ const defaultOrigins = [
   'https://for-all-cdd08.web.app',
   'https://for-all-cdd08.firebaseapp.com',
 ];
+
+const firebaseJwks = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
+);
 
 function allowedOrigins() {
   const extra = (process.env.ALLOWED_ORIGINS ?? '')
@@ -40,19 +43,34 @@ function json(res, status, body, origin) {
   res.end(JSON.stringify(body));
 }
 
-function firebaseApp() {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
+function firebaseProjectId() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 
   if (!raw) {
     throw new Error('missing-service-account');
   }
 
-  return initializeApp({
-    credential: cert(JSON.parse(raw)),
+  let parsed;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('missing-service-account');
+  }
+
+  if (typeof parsed?.project_id !== 'string' || !parsed.project_id) {
+    throw new Error('missing-service-account');
+  }
+
+  return parsed.project_id;
+}
+
+async function verifyFirebaseIdToken(token) {
+  const projectId = firebaseProjectId();
+
+  await jwtVerify(token, firebaseJwks, {
+    issuer: `https://securetoken.google.com/${projectId}`,
+    audience: projectId,
   });
 }
 
@@ -89,8 +107,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    await getAuth(firebaseApp()).verifyIdToken(token);
-  } catch {
+    await verifyFirebaseIdToken(token);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'missing-service-account') {
+      json(res, 500, { error: 'missing-service-account' }, origin);
+      return;
+    }
+
     json(res, 401, { error: 'unauthenticated' }, origin);
     return;
   }
