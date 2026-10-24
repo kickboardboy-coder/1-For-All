@@ -945,6 +945,11 @@ body {
 }
 
 .planner-explore {
+  --planner-search-row: 64px;
+  --planner-search-gap: 8px;
+  --planner-search-list-five: calc(
+    (5 * var(--planner-search-row)) + (4 * var(--planner-search-gap))
+  );
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -1228,11 +1233,10 @@ body {
 
 .planner-search-results-slot {
   flex: 0 0 auto;
-  height: auto;
-}
-
-.planner-search-results-slot:not(:empty) {
+  box-sizing: border-box;
+  height: var(--planner-search-list-five);
   margin-top: 12px;
+  overflow: auto;
 }
 
 .planner-search-results {
@@ -3426,6 +3430,16 @@ body {
 
   .planner-search-tools {
     flex-wrap: wrap;
+  }
+
+  .planner-search-results-slot {
+    height: auto;
+    overflow: visible;
+  }
+
+  .planner-search-results-slot:empty {
+    height: 0;
+    margin-top: 0;
   }
 
   .planner-dropdown {
