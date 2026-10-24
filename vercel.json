@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/openai-chat.js": {
+      "maxDuration": 60
+    }
+  }
+}

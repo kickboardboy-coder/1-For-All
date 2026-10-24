@@ -838,12 +838,54 @@ function stopDocId(day: number, order: number) {
   return `${String(day).padStart(2, '0')}-${String(order).padStart(2, '0')}`;
 }
 
+async function completeViaVercel(
+  payload: {
+    model: string;
+    messages: Array<{ role: 'system' | 'user'; content: string }>;
+    schema: typeof itinerarySchema;
+  },
+  proxyUrl: string,
+) {
+  const user = requireUser();
+  const token = await user.getIdToken();
+  const response = await axios.post(`${proxyUrl.replace(/\/$/, '')}/api/openai-chat`, payload, {
+    timeout: 90000,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const content = response.data?.content;
+
+  if (typeof content !== 'string') {
+    throw new Error('최적화 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.');
+  }
+
+  return content;
+}
+
 async function completeOpenAI(messages: Array<{ role: 'system' | 'user'; content: string }>) {
   const payload = {
     model,
     messages,
     schema: itinerarySchema,
   };
+  const proxyUrl = import.meta.env.VITE_OPENAI_PROXY_URL;
+
+  if (proxyUrl) {
+    try {
+      return await completeViaVercel(payload, proxyUrl);
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        throw new Error('로그인된 사용자가 없습니다.', { cause: error });
+      }
+
+      if (axios.isAxiosError(error) && error.response?.status === 412) {
+        throw new Error('OpenAI API 키를 설정해 주세요.', { cause: error });
+      }
+
+      throw error instanceof Error
+        ? error
+        : new Error('최적화를 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.', { cause: error });
+    }
+  }
 
   try {
     const openaiChat = httpsCallable<typeof payload, { content: string }>(functions, 'openaiChat');
